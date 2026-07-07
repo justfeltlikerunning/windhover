@@ -25,7 +25,3 @@ Repository = "https://github.com/justfeltlikerunning/windhover"
 
 [tool.hatch.build.targets.wheel]
 packages = ["windhover"]
-
-[tool.hatch.build.targets.wheel.force-include]
-"windhover/static" = "windhover/static"
-"windhover/pricing.json" = "windhover/pricing.json"
