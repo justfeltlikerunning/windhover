@@ -5,19 +5,20 @@
 > in the wind, watching everything below. This tool does the same for your agent graphs.
 
 **Self-hosted, mobile-friendly observability for [LangGraph](https://github.com/langchain-ai/langgraph).**
-Trace depth like LangSmith (LLM prompts, tokens, cost, latency), run history, a timing
-waterfall, per-node stats — and a **living graph view** that auto-updates when your code's
-topology changes. Point it at any compiled graph, or trace runs in from your own app.
-No LangSmith account, no cloud tunnel, no fragile websocket. HTTP + SSE, MIT.
+Trace depth like LangSmith (LLM prompts, tokens, cost, latency — plus retrievers and
+human-in-the-loop interrupts), run history, a timing waterfall, per-node stats, error
+forensics down to the throwing source line — and a **living graph view** that auto-updates
+when your code's topology changes. Point it at any compiled graph, or trace runs in from
+your own app. No LangSmith account, no cloud tunnel, no fragile websocket. HTTP + SSE, MIT.
 
 > Nothing about your graph's domain is baked in. Topology, the input form, and run
 > outputs all come from the graph itself. Windhover observes — it never edits your graph.
 
-| Living graph (parallel fan-out) | Trace drawer — prompts, tokens, cost, scores |
+| Living graph (parallel fan-out) | Trace drawer — retrievers, LLM calls, cost, state |
 |---|---|
 | ![Graph view](docs/graph.png) | ![Trace drawer](docs/trace.png) |
 
-| Runs — search, tags, sessions, bookmarks | Dashboards — per-day, per-model |
+| Runs — search, tags, sessions, interrupts | Dashboards — per-day, per-model |
 |---|---|
 | ![Runs table](docs/runs.png) | ![Stats](docs/stats.png) |
 
@@ -51,10 +52,16 @@ graph.invoke(input, config={
 
 ## Features
 - **Any graph** — topology from `graph.get_graph()`; input form from its state schema.
-- **Full trace tree** — nodes → nested LLM/tool spans, prompts, responses, tokens, cost, latency.
+- **Full trace tree** — nodes → nested LLM / tool / **retriever** spans: prompts, responses,
+  tokens, cost, latency, retrieved documents with their metadata.
 - **Clickable graph** — tap a node for health, latency, wiring, its **source code**, and recent executions with payloads.
 - **Error forensics** — failed runs show the full traceback; the failing node turns red on the
   graph, and the node's source renders with the **throwing line highlighted**.
+- **Human-in-the-loop aware** — a graph paused on `interrupt()` shows an amber **interrupted**
+  status plus the payload it's asking a human about.
+- **State evolution** — every trace shows which state keys each node wrote, in order.
+- **X-ray** — graphs with subgraphs get a canvas toggle that expands composite nodes
+  (`get_graph(xray=True)`).
 - **Search & filters** — full-text over prompts/payloads/errors (FTS5, LIKE fallback),
   status/tag/session filters, bookmarks, pagination, CSV/JSON export.
 - **Sessions** — group runs into threads/batches; roll-up tokens, cost, errors.
