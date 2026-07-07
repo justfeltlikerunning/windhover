@@ -1,0 +1,13 @@
+{
+  "name": "Windhover — LangGraph Visualizer",
+  "short_name": "Windhover",
+  "description": "Self-hosted, mobile-friendly visualizer for LangGraph agent graphs.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0b0f1a",
+  "theme_color": "#0b0f1a",
+  "orientation": "any",
+  "icons": [
+    { "src": "/static/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

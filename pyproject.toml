@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "windhover"
+version = "0.5.1"
+description = "Self-hosted, mobile-friendly observability for LangGraph — traces, run history, cost, and a living graph view."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "justfeltlikerunning" }]
+keywords = ["langgraph", "langchain", "observability", "tracing", "llm", "agents"]
+dependencies = ["fastapi>=0.110", "uvicorn>=0.29"]
+
+[project.optional-dependencies]
+demo = ["langgraph>=0.2"]
+dev = ["pytest", "langgraph>=0.2"]
+
+[project.scripts]
+windhover = "windhover.server:main"
+
+[project.urls]
+Repository = "https://github.com/justfeltlikerunning/windhover"
+
+[tool.hatch.build.targets.wheel]
+packages = ["windhover"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"windhover/static" = "windhover/static"
+"windhover/pricing.json" = "windhover/pricing.json"

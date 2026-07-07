@@ -1,0 +1,728 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b0d12" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f8fafc" media="(prefers-color-scheme: light)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.json">
+<title>Windhover</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%234f46e5'/%3E%3Cg fill='none' stroke='%23fff' stroke-width='26' stroke-linecap='round'%3E%3Cline x1='256' y1='132' x2='256' y2='222'/%3E%3Cline x1='256' y1='298' x2='172' y2='384'/%3E%3Cline x1='256' y1='298' x2='340' y2='384'/%3E%3C/g%3E%3Ccircle cx='256' cy='112' r='30' fill='%23fff'/%3E%3Ccircle cx='256' cy='260' r='36' fill='%23fff'/%3E%3Ccircle cx='164' cy='400' r='30' fill='%23fff'/%3E%3Ccircle cx='348' cy='400' r='30' fill='%23fff'/%3E%3C/svg%3E">
+<script src="/static/vendor/cytoscape.min.js"></script>
+<script src="/static/vendor/dagre.min.js"></script>
+<script src="/static/vendor/cytoscape-dagre.js"></script>
+<style>
+/* ---------- design tokens ---------- */
+:root{
+  --bg:#f8fafc; --surface:#ffffff; --surface2:#f1f5f9; --border:#e2e8f0; --border2:#cbd5e1;
+  --text:#0f172a; --text2:#475569; --muted:#94a3b8;
+  --accent:#4f46e5; --accent-weak:#eef2ff; --accent-text:#4338ca;
+  --ok:#16a34a; --ok-weak:#f0fdf4; --warn:#d97706; --warn-weak:#fffbeb; --err:#dc2626; --err-weak:#fef2f2;
+  --chip-node:#eff6ff; --chip-node-t:#1d4ed8; --chip-llm:#f5f3ff; --chip-llm-t:#6d28d9; --chip-tool:#ecfdf5; --chip-tool-t:#047857;
+  --shadow:0 1px 2px rgba(15,23,42,.04),0 4px 16px rgba(15,23,42,.06);
+  --shadow-lg:0 8px 40px rgba(15,23,42,.16);
+  --r:10px; --r-lg:14px;
+  --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+}
+:root[data-theme="dark"]{
+  --bg:#0b0d12; --surface:#12151c; --surface2:#181c25; --border:#232936; --border2:#323a4a;
+  --text:#e6eaf2; --text2:#a7b0c0; --muted:#64748b;
+  --accent:#6366f1; --accent-weak:#1c1f33; --accent-text:#a5b4fc;
+  --ok:#34d399; --ok-weak:#0c231a; --warn:#fbbf24; --warn-weak:#271d07; --err:#f87171; --err-weak:#2a1214;
+  --chip-node:#16223a; --chip-node-t:#93c5fd; --chip-llm:#221a38; --chip-llm-t:#c4b5fd; --chip-tool:#0d2620; --chip-tool-t:#6ee7b7;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 48px rgba(0,0,0,.55);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme]){
+  --bg:#0b0d12; --surface:#12151c; --surface2:#181c25; --border:#232936; --border2:#323a4a;
+  --text:#e6eaf2; --text2:#a7b0c0; --muted:#64748b;
+  --accent:#6366f1; --accent-weak:#1c1f33; --accent-text:#a5b4fc;
+  --ok:#34d399; --ok-weak:#0c231a; --warn:#fbbf24; --warn-weak:#271d07; --err:#f87171; --err-weak:#2a1214;
+  --chip-node:#16223a; --chip-node-t:#93c5fd; --chip-llm:#221a38; --chip-llm-t:#c4b5fd; --chip-tool:#0d2620; --chip-tool-t:#6ee7b7;
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
+  --shadow-lg:0 12px 48px rgba(0,0,0,.55);
+}}
+/* ---------- base ---------- */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased;overscroll-behavior:none}
+button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;padding:0}
+.num{font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:10px;height:10px}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:6px;border:2px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+
+/* ---------- app shell ---------- */
+#app{display:flex;height:100dvh}
+aside{width:216px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px calc(env(safe-area-inset-bottom) + 12px)}
+.logo{display:flex;align-items:center;gap:10px;padding:4px 10px 16px;font-weight:700;font-size:15px;letter-spacing:.2px}
+.logo svg{flex:none}
+.nav{display:flex;flex-direction:column;gap:2px}
+.nav button{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--text2);font-weight:500;text-align:left;width:100%}
+.nav button:hover{background:var(--surface2)}
+.nav button.on{background:var(--accent-weak);color:var(--accent-text);font-weight:600}
+.nav svg{width:16px;height:16px;flex:none}
+.side-foot{margin-top:auto;padding:10px;color:var(--muted);font-size:11.5px;display:flex;align-items:center;gap:8px}
+main{flex:1;display:flex;flex-direction:column;min-width:0}
+.topbar{height:56px;flex:none;display:flex;align-items:center;gap:12px;padding:0 20px;background:var(--surface);border-bottom:1px solid var(--border)}
+.crumb{font-weight:600;font-size:15px}
+.pill{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border);background:var(--surface2);border-radius:999px;padding:3px 10px;font-size:12px;color:var(--text2);font-family:var(--mono)}
+.live-dot{width:7px;height:7px;border-radius:50%;background:var(--ok)}
+.spacer{flex:1}
+.icon-btn{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;color:var(--text2);background:var(--surface)}
+.icon-btn:hover{background:var(--surface2)}
+.btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;font-weight:600;font-size:13.5px;white-space:nowrap}
+.btn.primary{background:var(--accent);color:#fff;box-shadow:var(--shadow)}
+.btn.primary:hover{filter:brightness(1.07)}
+.btn.primary[disabled]{opacity:.55;cursor:default}
+.btn.ghost{border:1px solid var(--border);color:var(--text2);background:var(--surface)}
+.btn.ghost:hover{background:var(--surface2)}
+.content{flex:1;overflow:auto;position:relative}
+.page{padding:20px;max-width:1200px}
+
+/* ---------- graph view ---------- */
+#view-graph{position:absolute;inset:0}
+#cy{position:absolute;inset:0}
+.graph-tools{position:absolute;top:14px;left:14px;display:flex;gap:8px;z-index:5}
+.legend{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 14px);left:14px;display:flex;gap:10px;z-index:5;
+  background:var(--surface);border:1px solid var(--border);border-radius:999px;box-shadow:var(--shadow);padding:6px 14px;font-size:12px;color:var(--text2)}
+.lg{display:flex;align-items:center;gap:6px}
+.sw{width:9px;height:9px;border-radius:3px;border:1.5px solid var(--border2)}
+.sw.run{border-color:var(--warn);background:var(--warn-weak)} .sw.done{border-color:var(--ok);background:var(--ok-weak)} .sw.err{border-color:var(--err);background:var(--err-weak)}
+
+/* ---------- table ---------- */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th{position:sticky;top:0;background:var(--surface);text-align:left;font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;padding:10px 14px;border-bottom:1px solid var(--border);white-space:nowrap}
+td{padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--surface2)}
+tbody tr:last-child td{border-bottom:none}
+td.r,th.r{text-align:right}
+.mono{font-family:var(--mono);font-size:12.5px;color:var(--text2)}
+.status{display:inline-flex;align-items:center;gap:6px;font-weight:600;font-size:12px;padding:2px 9px;border-radius:999px}
+.status .d{width:6px;height:6px;border-radius:50%}
+.status.done{background:var(--ok-weak);color:var(--ok)} .status.done .d{background:var(--ok)}
+.status.running{background:var(--warn-weak);color:var(--warn)} .status.running .d{background:var(--warn);animation:pulse 1.2s infinite}
+.status.error{background:var(--err-weak);color:var(--err)} .status.error .d{background:var(--err)}
+@keyframes pulse{50%{opacity:.35}}
+.src{font-size:11px;border:1px solid var(--border);border-radius:5px;padding:1px 6px;color:var(--muted)}
+.page-head{display:flex;align-items:baseline;gap:10px;margin:2px 2px 14px}
+.page-head h1{font-size:17px;margin:0;font-weight:700}
+.page-head .sub{color:var(--muted);font-size:13px}
+.empty{padding:56px 20px;text-align:center;color:var(--muted)}
+.empty .t{font-weight:600;color:var(--text2);margin-bottom:4px}
+
+/* ---------- stats ---------- */
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:14px 16px}
+.metric .v{font-size:22px;font-weight:700;letter-spacing:-.02em}
+.metric .l{color:var(--muted);font-size:12px;margin-top:2px}
+.latrow{display:grid;grid-template-columns:140px 1fr 74px;align-items:center;gap:12px;padding:9px 14px;border-bottom:1px solid var(--border)}
+.latrow:last-child{border-bottom:none}
+.latname{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lattrack{height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
+.latfill{height:100%;background:var(--accent);border-radius:4px;opacity:.85}
+.latms{text-align:right;color:var(--text2);font-family:var(--mono);font-size:12px}
+
+/* ---------- drawer (run detail) ---------- */
+.scrim{position:fixed;inset:0;background:rgba(2,6,23,.45);opacity:0;pointer-events:none;transition:.18s;z-index:40}
+.scrim.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100vw);background:var(--surface);border-left:1px solid var(--border);
+  box-shadow:var(--shadow-lg);transform:translateX(102%);transition:transform .24s cubic-bezier(.3,.9,.35,1);z-index:50;display:flex;flex-direction:column}
+.drawer.on{transform:none}
+.dhead{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
+.dhead .row1{display:flex;align-items:center;gap:10px}
+.dhead h2{margin:0;font-size:15px;font-weight:700}
+.dhead .x{margin-left:auto}
+.dmeta{display:flex;gap:14px;flex-wrap:wrap;margin-top:8px;color:var(--text2);font-size:12.5px}
+.dmeta b{color:var(--text);font-weight:600}
+.dbody{flex:1;overflow:auto;padding:14px 20px calc(env(safe-area-inset-bottom) + 18px)}
+/* trace tree */
+.tr-row{display:grid;grid-template-columns:1fr 120px 92px;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer}
+.tr-row.flat{grid-template-columns:1fr auto}
+.tr-row:hover{background:var(--surface2)}
+.tr-main{display:flex;align-items:center;gap:8px;min-width:0}
+.indent{flex:none;display:inline-block}
+.caret{flex:none;width:14px;color:var(--muted);transition:.15s;font-size:10px}
+.caret.open{transform:rotate(90deg)}
+.chip{font-size:10.5px;font-weight:700;padding:1.5px 7px;border-radius:5px;flex:none;letter-spacing:.02em}
+.chip.node{background:var(--chip-node);color:var(--chip-node-t)}
+.chip.llm{background:var(--chip-llm);color:var(--chip-llm-t)}
+.chip.tool{background:var(--chip-tool);color:var(--chip-tool-t)}
+.tr-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tr-name.err{color:var(--err)}
+.tr-gantt{height:6px;background:var(--surface2);border-radius:3px;position:relative;overflow:hidden}
+.tr-bar{position:absolute;top:0;bottom:0;border-radius:3px;background:var(--accent);opacity:.8;min-width:2px}
+.tr-bar.llm{background:#8b5cf6}.tr-bar.tool{background:#10b981}
+.tr-meta{text-align:right;color:var(--muted);font-family:var(--mono);font-size:11.5px}
+.tr-detail{margin:2px 0 8px 30px;border-left:2px solid var(--border);padding-left:12px;display:none}
+.kv{margin:8px 0}
+.kv .k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
+.copy{font-size:10.5px;color:var(--accent-text);background:var(--accent-weak);border-radius:5px;padding:1px 7px}
+.kv pre{margin:0;white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  padding:10px 12px;font:12px/1.55 var(--mono);color:var(--text);max-height:280px;overflow:auto}
+.kv pre.err{color:var(--err);background:var(--err-weak);border-color:transparent}
+
+/* ---------- modal (new run) ---------- */
+.modal{position:fixed;inset:0;display:grid;place-items:center;z-index:60;opacity:0;pointer-events:none;transition:.15s}
+.modal.on{opacity:1;pointer-events:auto}
+.modal .box{width:min(560px,calc(100vw - 32px));background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow-lg);padding:18px 20px}
+.modal h2{margin:0 0 4px;font-size:15px}
+.modal .hint{color:var(--muted);font-size:12.5px;margin-bottom:10px}
+textarea{width:100%;min-height:190px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;color:var(--text);
+  font:12.5px/1.55 var(--mono);padding:12px;resize:vertical;outline:none}
+textarea:focus{border-color:var(--accent)}
+.modal .actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+
+/* ---------- toast ---------- */
+.toast{position:fixed;right:20px;bottom:calc(env(safe-area-inset-bottom) + 20px);background:var(--surface);border:1px solid var(--border);
+  border-left:3px solid var(--accent);border-radius:10px;box-shadow:var(--shadow-lg);padding:11px 16px;font-size:13px;color:var(--text2);
+  z-index:70;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;max-width:min(420px,90vw)}
+.toast.show{opacity:1;transform:none}
+
+/* ---------- runs toolbar / chips / pager ---------- */
+.rtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
+.rtools input[type=search],.rtools select,.scoreadd input{background:var(--surface);border:1px solid var(--border);
+  border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;outline:none}
+.rtools input[type=search]{width:250px}
+.rtools input:focus,.rtools select:focus,.scoreadd input:focus{border-color:var(--accent)}
+#rbook.on{color:var(--warn);border-color:var(--warn)}
+.star{cursor:pointer;color:var(--muted);font-size:15px;line-height:1}
+.star.on{color:var(--warn)}
+.tagchip{display:inline-block;background:var(--accent-weak);color:var(--accent-text);font-size:10.5px;font-weight:600;
+  padding:1.5px 7px;border-radius:5px;margin:1px 4px 1px 0;cursor:pointer}
+.scorechip{display:inline-block;background:var(--ok-weak);color:var(--ok);font-size:10.5px;font-weight:600;
+  padding:1.5px 7px;border-radius:5px;margin:1px 4px 1px 0}
+.pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:10px;color:var(--muted);font-size:12.5px}
+.pager button{color:var(--text2);font-weight:600;padding:4px 10px;border:1px solid var(--border);border-radius:7px;background:var(--surface)}
+.pager button:disabled{opacity:.4}
+.scoreadd{display:flex;gap:6px;margin:6px 0 12px;flex-wrap:wrap}
+.scoreadd input{padding:6px 9px;font-size:12.5px}
+.scorerow{display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:7px}
+.scorerow:hover{background:var(--surface2)}
+.scorerow .del{cursor:pointer;color:var(--muted);margin-left:auto}
+.scorerow .del:hover{color:var(--err)}
+/* ---------- stats charts ---------- */
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.cwrap{padding:12px 14px 4px}
+.cwrap b{font-size:13px}
+.chartrow{display:flex;align-items:flex-end;gap:3px;height:110px;padding:10px 4px 0}
+.cbar{flex:1;min-width:4px;background:var(--accent);opacity:.8;border-radius:3px 3px 0 0;position:relative}
+.cbar .errpart{position:absolute;left:0;right:0;bottom:0;background:var(--err);border-radius:0 0 0 0}
+.clabels{display:flex;justify-content:space-between;color:var(--muted);font-size:10.5px;padding:5px 6px 10px}
+@media(max-width:840px){.charts{grid-template-columns:1fr}}
+
+/* ---------- mobile ---------- */
+.bottom-nav{display:none}
+@media (max-width:840px){
+  aside{display:none}
+  .topbar{padding:calc(env(safe-area-inset-top)) 14px 0;height:calc(52px + env(safe-area-inset-top))}
+  .crumb{font-size:15px}
+  .page{padding:14px 12px calc(env(safe-area-inset-bottom) + 80px)}
+  .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);
+    padding:6px 8px calc(env(safe-area-inset-bottom) + 6px);z-index:20;justify-content:space-around}
+  .bottom-nav button{display:flex;flex-direction:column;align-items:center;gap:3px;color:var(--muted);font-size:10.5px;font-weight:600;padding:4px 14px;border-radius:10px}
+  .bottom-nav button.on{color:var(--accent-text)}
+  .bottom-nav svg{width:20px;height:20px}
+  .drawer{width:100vw}
+  .legend{display:none}
+  #view-runs th:nth-child(5),#view-runs td:nth-child(5),
+  #view-runs th:nth-child(6),#view-runs td:nth-child(6),
+  #view-runs th:nth-child(8),#view-runs td:nth-child(8){display:none}
+}
+@media (max-width:600px){
+  .tr-row{grid-template-columns:1fr 86px}
+  .tr-gantt{display:none}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <div class="logo">
+      <svg width="22" height="22" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="var(--accent)"/><g fill="none" stroke="#fff" stroke-width="26" stroke-linecap="round"><line x1="256" y1="132" x2="256" y2="222"/><line x1="256" y1="298" x2="172" y2="384"/><line x1="256" y1="298" x2="340" y2="384"/></g><circle cx="256" cy="112" r="30" fill="#fff"/><circle cx="256" cy="260" r="36" fill="#fff"/><circle cx="164" cy="400" r="30" fill="#fff"/><circle cx="348" cy="400" r="30" fill="#fff"/></svg>
+      Windhover
+    </div>
+    <nav class="nav">
+      <button data-v="graph" class="on">${ICON.graph} Graph</button>
+      <button data-v="runs">${ICON.list} Runs</button>
+      <button data-v="sessions">${ICON.layers} Sessions</button>
+      <button data-v="stats">${ICON.chart} Stats</button>
+    </nav>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.5</span></div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <span class="crumb" id="crumb">Graph</span>
+      <span class="pill" id="gpill"><span class="live-dot"></span><span id="gname">—</span></span>
+      <div class="spacer"></div>
+      <button class="icon-btn" id="theme" title="theme">${ICON.moon}</button>
+      <button class="btn primary" id="newrun">${ICON.play} New run</button>
+    </div>
+    <div class="content">
+      <div id="view-graph">
+        <div id="cy"></div>
+        <div class="graph-tools">
+          <button class="btn ghost" onclick="cy&&cy.fit(undefined,50)">Fit</button>
+          <button class="btn ghost" onclick="relayout()">Layout</button>
+          <button class="btn ghost" id="orient" onclick="toggleOrient()">⇅ Vertical</button>
+        </div>
+        <div class="legend">
+          <span class="lg"><span class="sw"></span> idle</span>
+          <span class="lg"><span class="sw run"></span> running</span>
+          <span class="lg"><span class="sw done"></span> done</span>
+          <span class="lg"><span class="sw err"></span> error</span>
+        </div>
+      </div>
+      <div id="view-runs" style="display:none">
+        <div class="page">
+          <div class="page-head"><h1>Runs</h1><span class="sub" id="runs-sub"></span></div>
+          <div class="rtools">
+            <input type="search" id="rq" placeholder="Search payloads, prompts, errors…">
+            <select id="rstatus"><option value="">All statuses</option>
+              <option value="done">done</option><option value="error">error</option>
+              <option value="running">running</option></select>
+            <button class="btn ghost" id="rbook" title="only bookmarked">★</button>
+            <span id="rf-active"></span>
+            <span class="spacer"></span>
+            <button class="btn ghost" onclick="exportRuns('csv')">CSV</button>
+            <button class="btn ghost" onclick="exportRuns('json')">JSON</button>
+          </div>
+          <div class="card"><div id="runs-wrap"><div class="empty">Loading…</div></div></div>
+          <div class="pager" id="pager"></div>
+        </div>
+      </div>
+      <div id="view-sessions" style="display:none">
+        <div class="page">
+          <div class="page-head"><h1>Sessions</h1><span class="sub" id="sess-sub"></span></div>
+          <div class="card"><div id="sess-wrap"><div class="empty">Loading…</div></div></div>
+        </div>
+      </div>
+      <div id="view-stats" style="display:none">
+        <div class="page">
+          <div class="page-head"><h1>Stats</h1><span class="sub">all recorded runs</span></div>
+          <div id="stats-body"></div>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="bottom-nav">
+  <button data-v="graph" class="on">${ICON.graph}<span>Graph</span></button>
+  <button data-v="runs">${ICON.list}<span>Runs</span></button>
+  <button data-v="sessions">${ICON.layers}<span>Sessions</span></button>
+  <button data-v="stats">${ICON.chart}<span>Stats</span></button>
+</div>
+
+<div class="scrim" id="scrim" onclick="closeAll()"></div>
+
+<div class="drawer" id="drawer">
+  <div class="dhead">
+    <div class="row1"><h2 id="d-title">Run</h2><span class="status done" id="d-status"><span class="d"></span><span id="d-status-t">done</span></span>
+      <button class="icon-btn x" onclick="closeAll()">${ICON.x}</button></div>
+    <div class="dmeta" id="d-meta"></div>
+  </div>
+  <div class="dbody" id="d-body"></div>
+</div>
+
+<div class="modal" id="modal">
+  <div class="box">
+    <h2>New run</h2>
+    <div class="hint">Input is derived from this graph's own state schema. Edit the JSON, then run.</div>
+    <textarea id="input-json" spellcheck="false"></textarea>
+    <div class="scoreadd" style="margin-top:10px">
+      <input id="run-session" placeholder="session (optional)" style="flex:1;min-width:130px">
+      <input id="run-tags" placeholder="tags, comma-separated (optional)" style="flex:1;min-width:160px">
+    </div>
+    <div class="actions">
+      <button class="btn ghost" onclick="closeAll()">Cancel</button>
+      <button class="btn primary" id="do-run">${ICON.play} Run</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ---------- icons ---------- */
+const ICON = {
+  graph:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="5" r="2.4"/><circle cx="5.5" cy="18" r="2.4"/><circle cx="18.5" cy="18" r="2.4"/><path d="M12 7.5v4M10.6 13.2 7 15.8M13.4 13.2 17 15.8"/></svg>',
+  list:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  chart:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V9M10 20V4M16 20v-7M21 20H3"/></svg>',
+  layers:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+  play:'<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 4.8v14.4c0 .8.9 1.3 1.6.9l11-7.2c.6-.4.6-1.4 0-1.8l-11-7.2c-.7-.4-1.6.1-1.6.9z"/></svg>',
+  moon:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 13.5A8 8 0 1 1 10.5 4 6.5 6.5 0 0 0 20 13.5z"/></svg>',
+  x:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+};
+document.body.innerHTML = document.body.innerHTML.replaceAll(/\$\{ICON\.(\w+)\}/g,(m,k)=>ICON[k]||'');
+
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let cy=null, VIEW='graph';
+
+/* ---------- theme ---------- */
+function setTheme(t){ if(t) document.documentElement.dataset.theme=t; else delete document.documentElement.dataset.theme;
+  localStorage.setItem('wh-theme',t||''); if(cy) applyCyStyle(); }
+setTheme(localStorage.getItem('wh-theme')||'');
+$('#theme').onclick=()=>{ const cur=document.documentElement.dataset.theme||
+  (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+  setTheme(cur==='dark'?'light':'dark'); };
+
+function cssv(n){ return getComputedStyle(document.documentElement).getPropertyValue(n).trim(); }
+function cyStyle(){ return [
+ {selector:'node',style:{'shape':'round-rectangle','width':'label','height':40,'padding':'12px',
+   'background-color':cssv('--surface'),'border-width':1.5,'border-color':cssv('--border2'),
+   'label':'data(label)','color':cssv('--text'),'font-size':13,'font-weight':600,
+   'text-valign':'center','text-halign':'center'}},
+ {selector:'node[terminal]',style:{'shape':'round-rectangle','background-color':cssv('--surface2'),'color':cssv('--muted'),'font-size':11,'height':28,'border-color':cssv('--border')}},
+ {selector:'node.running',style:{'border-color':cssv('--warn'),'border-width':2.5,'background-color':cssv('--warn-weak')}},
+ {selector:'node.done',style:{'border-color':cssv('--ok'),'background-color':cssv('--ok-weak')}},
+ {selector:'node.err',style:{'border-color':cssv('--err'),'background-color':cssv('--err-weak')}},
+ {selector:'edge',style:{'width':1.6,'line-color':cssv('--border2'),'target-arrow-color':cssv('--border2'),'target-arrow-shape':'triangle','curve-style':'bezier','arrow-scale':1}},
+ {selector:'edge[?conditional]',style:{'line-style':'dashed'}},
+ {selector:'edge.flow',style:{'line-color':cssv('--accent'),'target-arrow-color':cssv('--accent'),'width':2.4}},
+];}
+function applyCyStyle(){ cy.style(cyStyle()); }
+
+/* ---------- graph ---------- */
+async function loadGraph(force){
+  const t=await(await fetch('/api/graph')).json();
+  $('#gname').textContent=t.graph||'ingest-only';
+  if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
+  const els=[];
+  t.nodes.forEach(n=>els.push({data:{id:n.id,label:n.label,terminal:n.terminal?1:undefined}}));
+  t.edges.forEach(e=>els.push({data:{id:e.id,source:e.source,target:e.target,conditional:e.conditional?1:undefined}}));
+  if(cy&&!force){return;}
+  cy=cytoscape({container:$('#cy'),elements:els,style:cyStyle(),
+    layout:layoutOpts(),minZoom:.2,maxZoom:3,wheelSensitivity:.12});
+  cy.on('tap','node',ev=>{ const n=ev.target; if(!n.data('terminal')) openNode(n.id()); });
+  cy.on('mouseover','node',ev=>{ if(!ev.target.data('terminal')) $('#cy').style.cursor='pointer'; });
+  cy.on('mouseout','node',()=>{ $('#cy').style.cursor=''; });
+}
+/* middle-button drag pans the graph (and suppress the browser's autoscroll) */
+(()=>{ const cont=$('#cy'); if(!cont) return;
+  cont.addEventListener('mousedown',e=>{ if(e.button!==1||!cy) return; e.preventDefault();
+    let px=e.clientX, py=e.clientY;
+    const move=ev=>{ cy.panBy({x:ev.clientX-px,y:ev.clientY-py}); px=ev.clientX; py=ev.clientY; };
+    const up=ev=>{ if(ev.button!==1) return;
+      window.removeEventListener('mousemove',move); window.removeEventListener('mouseup',up); };
+    window.addEventListener('mousemove',move); window.addEventListener('mouseup',up);
+  });
+  cont.addEventListener('auxclick',e=>{ if(e.button===1) e.preventDefault(); });
+})();
+
+let RANK=localStorage.getItem('wh-rank')||'TB';
+function layoutOpts(){ return {name:'dagre',rankDir:RANK,nodeSep:30,rankSep:56}; }
+function relayout(){ if(cy){ cy.layout(layoutOpts()).run(); cy.fit(undefined,50); } }
+function orientLabel(){ const b=$('#orient'); if(b) b.textContent=RANK==='TB'?'⇅ Vertical':'⇄ Horizontal'; }
+window.toggleOrient=()=>{ RANK=RANK==='TB'?'LR':'TB'; localStorage.setItem('wh-rank',RANK); orientLabel(); relayout(); };
+orientLabel();
+
+/* ---------- node pane (tap a node on the graph) ---------- */
+async function openNode(name){
+  let d={}; try{ d=await(await fetch('/api/nodes/'+encodeURIComponent(name))).json(); }catch(e){}
+  const s=d.summary||{}, errs=s.errors||0;
+  $('#d-title').textContent=name;
+  const st=$('#d-status'); st.className='status '+(errs?'error':'done');
+  $('#d-status-t').textContent=errs?errs+' error'+(errs>1?'s':''):'healthy';
+  const inn=cy?cy.edges(`[target="${name}"]`).map(e=>e.source().id()):[];
+  const out=cy?cy.edges(`[source="${name}"]`).map(e=>e.target().id()):[];
+  $('#d-meta').innerHTML=[
+    `<span><b class="num">${s.n||0}</b> executions</span>`,
+    s.avg_ms!=null?`<span><b>${fmtms(Math.round(s.avg_ms))}</b> avg</span>`:'',
+    s.max_ms!=null?`<span><b>${fmtms(s.max_ms)}</b> max</span>`:'',
+    s.tokens?`<span><b class="num">${fmtk(s.tokens)}</b> tokens</span>`:'',
+    s.cost!=null?`<span><b class="num">$${(+s.cost).toFixed(4)}</b> cost</span>`:'',
+  ].filter(Boolean).join('');
+  let html=`<div class="kv"><div class="k">wiring</div><pre>${esc((inn.join(', ')||'START')+'  →  '+name+'  →  '+(out.join(', ')||'END'))}</pre></div>
+    <div class="kv"><div class="k">executions — newest first, expand for payloads</div></div>`;
+  html+=(d.recent||[]).length?d.recent.map((r,i)=>{
+    const did='nx'+i, open=i===0;
+    const kids=r.children||[];
+    const kidHtml=kids.map(k=>`
+      <div class="kv"><div class="k"><span class="chip ${k.type}">${k.type}</span>&nbsp;${esc(k.name||k.type)}${
+        k.prompt_tokens!=null?` · ${k.prompt_tokens} in / ${k.completion_tokens||0} out`:''}${
+        k.dur_ms!=null?` · ${fmtms(k.dur_ms)}`:''}</div></div>
+      ${k.error?`<div class="kv"><div class="k">error</div><pre class="err">${esc(k.error)}</pre></div>`:''}
+      ${k.input!=null?kv(esc(k.name||k.type)+' input',k.input):''}
+      ${k.output!=null?kv(esc(k.name||k.type)+' output',k.output):''}`).join('');
+    return `<div>
+      <div class="tr-row flat" onclick="tog('${did}',this)">
+        <div class="tr-main"><span class="caret ${open?'open':''}">▶</span><span class="chip ${r.type}">${r.type}</span>
+          <span class="tr-name ${r.status==='error'?'err':''}">${esc(r.graph||name)}</span>
+          <span class="mono" style="color:var(--muted);font-size:11px">${r.run_id.slice(0,8)}</span></div>
+        <div class="tr-meta">${[r.dur_ms!=null?fmtms(r.dur_ms):null,
+          (r.prompt_tokens!=null||r.completion_tokens!=null)?fmtk((r.prompt_tokens||0)+(r.completion_tokens||0))+'t':null,
+          ago(r.started_ms)].filter(Boolean).join(' · ')}</div>
+      </div>
+      <div class="tr-detail" id="${did}" style="${open?'display:block':''}">
+        ${r.error?`<div class="kv"><div class="k">error</div><pre class="err">${esc(r.error)}</pre></div>`:''}
+        ${r.input!=null?kv('input',r.input):''}
+        ${r.output!=null?kv('output',r.output):''}
+        ${kidHtml}
+        ${(r.input==null&&r.output==null&&!kids.length&&!r.error)?'<div class="kv"><pre>no captured payload for this execution</pre></div>':''}
+        <div style="margin:6px 0 10px"><button class="btn ghost" onclick="openRun('${r.run_id}')">Open full trace</button></div>
+      </div></div>`;
+  }).join(''):'<div class="empty">No recorded executions of this node yet</div>';
+  $('#d-body').innerHTML=html;
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+}
+function liveTopology(){ try{ const es=new EventSource('/api/events');
+  es.addEventListener('topology',async()=>{ await loadGraph(true); toast('Graph definition changed — view updated'); });
+  es.onerror=()=>{ es.close(); $('#foot-note').textContent='reconnecting…'; setTimeout(liveTopology,5000); };
+  es.onopen=()=>{ $('#foot-note').textContent='watching'; };
+}catch(e){} }
+
+/* ---------- views ---------- */
+function switchView(v){ VIEW=v;
+  if(location.hash!=='#'+v) history.replaceState(null,'','#'+v);
+  $$('.nav button,.bottom-nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
+  $('#crumb').textContent=v[0].toUpperCase()+v.slice(1);
+  for(const k of ['graph','runs','sessions','stats'])
+    $('#view-'+k).style.display=v===k?'':'none';
+  if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='stats')loadStats();
+  if(cy&&v==='graph')setTimeout(()=>cy.resize(),40);
+}
+$$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
+
+/* ---------- new run ---------- */
+$('#newrun').onclick=async()=>{ let tpl={}; try{tpl=(await(await fetch('/api/schema')).json()).template||{};}catch(e){}
+  $('#input-json').value=JSON.stringify(tpl,null,2); $('#scrim').classList.add('on'); $('#modal').classList.add('on'); };
+$('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json').value||'{}');}catch(e){return toast('Invalid JSON input');}
+  const sess=$('#run-session').value.trim();
+  const tags=$('#run-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
+  if(sess)input._session=sess; if(tags.length)input._tags=tags;
+  closeAll(); switchView('graph'); await runNow(input); };
+
+async function runNow(input){
+  const b=$('#newrun'); b.disabled=true;
+  cy.nodes().removeClass('running done err'); cy.edges().removeClass('flow'); let prev='__start__';
+  try{
+    const res=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});
+    const rd=res.body.getReader(),dec=new TextDecoder(); let buf='';
+    while(true){ const {value,done}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+      let ps=buf.split('\n\n'); buf=ps.pop();
+      for(const p of ps){ const ev=(p.match(/event: (.*)/)||[])[1],dm=(p.match(/data: (.*)/s)||[])[1]; if(!ev)continue; const d=dm?JSON.parse(dm):{};
+        if(ev==='node'){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id(d.node).addClass('running');
+          cy.edges(`[source="${prev}"][target="${d.node}"]`).addClass('flow'); prev=d.node; }
+        else if(ev==='done'){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id('__end__').addClass('done'); toast('Run complete — saved to Runs'); }
+        else if(ev==='error'){ cy.$id(prev).addClass('err').removeClass('running'); toast('Run error: '+(d.message||'failed')); } } }
+  }catch(e){ toast('Run failed: '+e.message); }
+  b.disabled=false;
+}
+
+/* ---------- runs table (filters + pagination) ---------- */
+const RF={q:'',status:'',tag:'',bookmarked:false,session:'',offset:0,limit:50};
+function runParams(){ const p=new URLSearchParams();
+  if(RF.q)p.set('q',RF.q); if(RF.status)p.set('status',RF.status);
+  if(RF.tag)p.set('tag',RF.tag); if(RF.bookmarked)p.set('bookmarked','1');
+  if(RF.session)p.set('session',RF.session); return p; }
+async function loadRuns(){
+  const p=runParams(); p.set('limit',RF.limit); p.set('offset',RF.offset);
+  const d=await(await fetch('/api/runs?'+p)).json();
+  const runs=d.runs||[];
+  $('#runs-sub').textContent=d.total?`${d.total} run${d.total===1?'':'s'}`:'';
+  $('#rf-active').innerHTML=[
+    RF.tag?`<span class="tagchip" onclick="setTag('')">tag: ${esc(RF.tag)} ×</span>`:'',
+    RF.session?`<span class="tagchip" onclick="RF.session='';RF.offset=0;loadRuns()">session: ${esc(RF.session)} ×</span>`:'',
+  ].join('');
+  if(!runs.length){
+    $('#runs-wrap').innerHTML=`<div class="empty"><div class="t">${d.total===0&&!RF.q&&!RF.status&&!RF.tag&&!RF.bookmarked&&!RF.session?'No runs yet':'No matches'}</div>${d.total===0?'Run the graph, or add <span class="mono">WindhoverTracer</span> to your app.':'Try clearing filters.'}</div>`;
+    $('#pager').innerHTML=''; return; }
+  $('#runs-wrap').innerHTML=`<div style="overflow:auto"><table>
+    <thead><tr><th></th><th>Status</th><th>Run</th><th>Source</th><th class="r">Nodes</th><th class="r">LLM</th><th class="r">Tokens</th><th class="r">Cost</th><th>Scores</th><th class="r">Duration</th><th class="r">Age</th></tr></thead>
+    <tbody>${runs.map(r=>`<tr onclick="openRun('${r.id}')">
+      <td onclick="event.stopPropagation();toggleBook('${r.id}',${r.bookmarked?0:1})"><span class="star ${r.bookmarked?'on':''}">${r.bookmarked?'★':'☆'}</span></td>
+      <td><span class="status ${r.status}"><span class="d"></span>${r.status}</span></td>
+      <td><div style="font-weight:600">${esc(r.graph||'run')}</div><div class="mono">${r.id.slice(0,10)}</div>
+        ${(r.tags||[]).map(t=>`<span class="tagchip" onclick="event.stopPropagation();setTag(decodeURIComponent('${encodeURIComponent(t)}'))">${esc(t)}</span>`).join('')}</td>
+      <td><span class="src">${r.source}</span>${r.session?`<div class="mono" style="font-size:10.5px;color:var(--muted);cursor:pointer" onclick="event.stopPropagation();RF.session=decodeURIComponent('${encodeURIComponent(r.session)}');RF.offset=0;loadRuns()">${esc(r.session)}</div>`:''}</td>
+      <td class="r num">${r.node_count??0}</td>
+      <td class="r num">${r.llm_calls||'—'}</td>
+      <td class="r num">${r.total_tokens?fmtk(r.total_tokens):'—'}</td>
+      <td class="r num">${r.cost_usd!=null?'$'+r.cost_usd.toFixed(4):'—'}</td>
+      <td>${r.scores?Object.entries(r.scores).map(([k,v])=>`<span class="scorechip">${esc(k)} ${v}</span>`).join(''):'<span style="color:var(--muted)">—</span>'}</td>
+      <td class="r num mono">${r.duration_ms!=null?fmtms(r.duration_ms):'…'}</td>
+      <td class="r" style="color:var(--muted)">${ago(r.started_ms)}</td></tr>`).join('')}</tbody></table></div>`;
+  const page=Math.floor(RF.offset/RF.limit)+1, pages=Math.max(1,Math.ceil(d.total/RF.limit));
+  $('#pager').innerHTML=pages>1?`
+    <button ${RF.offset===0?'disabled':''} onclick="RF.offset=Math.max(0,RF.offset-RF.limit);loadRuns()">‹ Prev</button>
+    <span>page ${page} / ${pages}</span>
+    <button ${RF.offset+RF.limit>=d.total?'disabled':''} onclick="RF.offset+=RF.limit;loadRuns()">Next ›</button>`:'';
+}
+window.setTag=t=>{RF.tag=t;RF.offset=0;loadRuns();};
+window.toggleBook=async(id,b)=>{
+  await fetch('/api/runs/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({bookmarked:!!b})});
+  loadRuns();};
+window.exportRuns=fmt=>{const p=runParams();p.set('format',fmt);location='/api/export?'+p;};
+let rqT; $('#rq').oninput=e=>{clearTimeout(rqT);rqT=setTimeout(()=>{RF.q=e.target.value.trim();RF.offset=0;loadRuns();},300);};
+$('#rstatus').onchange=e=>{RF.status=e.target.value;RF.offset=0;loadRuns();};
+$('#rbook').onclick=()=>{RF.bookmarked=!RF.bookmarked;$('#rbook').classList.toggle('on',RF.bookmarked);RF.offset=0;loadRuns();};
+
+/* ---------- sessions ---------- */
+async function loadSessions(){
+  const ss=await(await fetch('/api/sessions')).json();
+  $('#sess-sub').textContent=ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'';
+  if(!ss.length){ $('#sess-wrap').innerHTML='<div class="empty"><div class="t">No sessions yet</div>Pass <span class="mono">session=</span> to <span class="mono">WindhoverTracer</span>, or <span class="mono">config={"metadata": {"windhover_session": …}}</span> in any LangChain/LangGraph app.</div>'; return; }
+  $('#sess-wrap').innerHTML=`<div style="overflow:auto"><table>
+    <thead><tr><th>Session</th><th class="r">Runs</th><th class="r">Errors</th><th class="r">Tokens</th><th class="r">Cost</th><th class="r">Total time</th><th class="r">Last active</th></tr></thead>
+    <tbody>${ss.map(s=>`<tr onclick="RF.session=decodeURIComponent('${encodeURIComponent(s.session)}');RF.offset=0;switchView('runs')">
+      <td style="font-weight:600" class="mono">${esc(s.session)}</td>
+      <td class="r num">${s.runs}</td>
+      <td class="r num" ${s.errors?'style="color:var(--err)"':''}>${s.errors||'—'}</td>
+      <td class="r num">${s.tokens?fmtk(s.tokens):'—'}</td>
+      <td class="r num">${s.cost!=null?'$'+s.cost.toFixed(4):'—'}</td>
+      <td class="r num mono">${s.duration_ms!=null?fmtms(s.duration_ms):'—'}</td>
+      <td class="r" style="color:var(--muted)">${ago(s.last_ms)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+/* ---------- run drawer (span tree) ---------- */
+async function openRun(id){
+  const r=await(await fetch('/api/runs/'+id)).json();
+  $('#d-title').textContent=(r.graph||'run')+' · '+id.slice(0,8);
+  const st=$('#d-status'); st.className='status '+r.status; $('#d-status-t').textContent=r.status;
+  $('#d-meta').innerHTML=[
+    `<span><b>${fmtms(r.duration_ms||0)}</b> duration</span>`,
+    `<span><b class="num">${r.node_count||0}</b> nodes</span>`,
+    r.llm_calls?`<span><b class="num">${r.llm_calls}</b> LLM calls</span>`:'',
+    r.total_tokens?`<span><b class="num">${fmtk(r.total_tokens)}</b> tokens</span>`:'',
+    r.cost_usd!=null?`<span><b class="num">$${r.cost_usd.toFixed(5)}</b> cost</span>`:'',
+    r.session?`<span>session <b class="mono">${esc(r.session)}</b></span>`:'',
+    (r.tags||[]).length?`<span>${r.tags.map(t=>`<span class="tagchip">${esc(t)}</span>`).join('')}</span>`:'',
+    `<span>${new Date(r.started_ms).toLocaleString()}</span>`,
+  ].filter(Boolean).join('');
+  const total=Math.max(1,...r.spans.map(s=>(s.offset_ms||0)+(s.dur_ms||0)));
+  const byParent={}; r.spans.forEach(s=>{(byParent[s.parent_id||'root']=byParent[s.parent_id||'root']||[]).push(s);});
+  let html = r.error?`<div class="kv"><div class="k">run error</div><pre class="err">${esc(r.error)}</pre></div>`:'';
+  html += renderSpans(byParent['root']||[],byParent,total,0);
+  html += `<div class="kv" style="margin-top:14px"><div class="k">scores</div></div>
+    ${(r.scores||[]).map(sc=>`<div class="scorerow"><span class="scorechip">${esc(sc.name)} ${sc.value}</span>
+      ${sc.comment?`<span style="color:var(--muted);font-size:12px">${esc(sc.comment)}</span>`:''}
+      <span class="del" onclick="delScore('${sc.id}','${id}')">×</span></div>`).join('')}
+    <div class="scoreadd">
+      <input id="sc-name" placeholder="name" style="width:110px">
+      <input id="sc-val" placeholder="value" type="number" step="any" style="width:80px">
+      <input id="sc-com" placeholder="comment (optional)" style="flex:1;min-width:120px">
+      <button class="btn ghost" onclick="addScore('${id}')">Add score</button>
+    </div>`;
+  html += `<div style="margin-top:6px"><button class="btn ghost" onclick='replay(${JSON.stringify(r.spans.filter(s=>s.type==="node").map(s=>s.name))})'>⟲ Replay on graph</button></div>`;
+  $('#d-body').innerHTML=html;
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+}
+window.addScore=async(id)=>{
+  const name=$('#sc-name').value.trim(), value=parseFloat($('#sc-val').value);
+  if(!name||Number.isNaN(value)) return toast('Score needs a name and a numeric value');
+  const res=await fetch(`/api/runs/${id}/scores`,{method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({name,value,comment:$('#sc-com').value.trim()||null,source:'ui'})});
+  if(res.ok){ toast('Score added'); openRun(id); if(VIEW==='runs')loadRuns(); }
+  else toast('Score failed: '+((await res.json()).error||res.status));
+};
+window.delScore=async(sid,rid)=>{
+  await fetch('/api/scores/'+sid,{method:'DELETE'}); toast('Score removed'); openRun(rid);
+  if(VIEW==='runs')loadRuns();
+};
+function renderSpans(list,byParent,total,depth){
+  return list.map(s=>{
+    const kids=byParent[s.id]||[];
+    const left=((s.offset_ms||0)/total*100).toFixed(2), width=Math.max(1.2,(s.dur_ms||0)/total*100).toFixed(2);
+    const meta=[s.dur_ms!=null?s.dur_ms+'ms':null,
+      s.type==='llm'&&(s.prompt_tokens!=null||s.completion_tokens!=null)?fmtk((s.prompt_tokens||0)+(s.completion_tokens||0))+'t':null,
+      s.cost_usd!=null?'$'+s.cost_usd.toFixed(4):null].filter(Boolean).join(' · ');
+    const did='sp'+s.id;
+    return `<div>
+      <div class="tr-row" onclick="tog('${did}',this)">
+        <div class="tr-main"><span class="indent" style="width:${depth*18}px"></span>
+          <span class="caret">▶</span><span class="chip ${s.type}">${s.type}</span>
+          <span class="tr-name ${s.status==='error'?'err':''}">${esc(s.name||s.type)}</span></div>
+        <div class="tr-gantt"><div class="tr-bar ${s.type}" style="left:${left}%;width:${width}%"></div></div>
+        <div class="tr-meta">${meta}</div>
+      </div>
+      <div class="tr-detail" id="${did}">
+        ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}</pre></div>`:''}
+        ${s.error?`<div class="kv"><div class="k">error</div><pre class="err">${esc(s.error)}</pre></div>`:''}
+        ${s.input!=null?kv('input',s.input):''}
+        ${s.output!=null?kv('output',s.output):''}
+        ${(!s.error&&s.input==null&&s.output==null&&!s.model)?'<div class="kv"><pre>no captured payload</pre></div>':''}
+      </div>
+      ${renderSpans(kids,byParent,total,depth+1)}
+    </div>`;
+  }).join('');
+}
+function kv(k,v){ const txt=typeof v==='string'?v:JSON.stringify(v,null,2);
+  return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(this.closest('.kv').querySelector('pre').textContent);toast('Copied')">copy</button></div><pre>${esc(txt)}</pre></div>`; }
+window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
+  el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
+window.replay=async(nodes)=>{ closeAll(); switchView('graph');
+  cy.nodes().removeClass('running done err'); cy.edges().removeClass('flow'); let prev='__start__';
+  for(const n of nodes){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id(n).addClass('running');
+    cy.edges(`[source="${prev}"][target="${n}"]`).addClass('flow'); prev=n; await new Promise(r=>setTimeout(r,380)); }
+  cy.$id(prev).addClass('done').removeClass('running'); cy.$id('__end__').addClass('done'); };
+
+/* ---------- stats ---------- */
+function chartCard(title,daily,val,errKey){
+  const max=Math.max(1,...daily.map(d=>val(d)||0));
+  return `<div class="card"><div class="cwrap"><b>${title}</b>
+    <div class="chartrow">${daily.map(d=>{
+      const v=val(d)||0,h=Math.max(v?4:1,v/max*100);
+      const ep=errKey&&v?Math.min(100,(d[errKey]||0)/v*100):0;
+      return `<div class="cbar" style="height:${h}%" title="${d.day}: ${fmtk(v)}${errKey&&d[errKey]?' ('+d[errKey]+' errors)':''}">${ep?`<div class="errpart" style="height:${ep}%"></div>`:''}</div>`;}).join('')}</div>
+    <div class="clabels"><span>${daily[0]?.day||''}</span><span>${daily[daily.length-1]?.day||''}</span></div></div></div>`;
+}
+async function loadStats(){
+  const s=await(await fetch('/api/stats?days=30')).json(); const t=s.totals||{};
+  const errRate=t.runs?Math.round((t.errors||0)/t.runs*100):0;
+  const max=Math.max(1,...(s.per_node||[]).map(n=>n.avg_ms||0));
+  const daily=s.daily||[], models=s.models||[];
+  const db=t.db_bytes!=null?(t.db_bytes/1048576).toFixed(1)+' MB db':'';
+  $('#stats-body').innerHTML=`
+    <div class="metrics">
+      <div class="metric"><div class="v num">${t.runs||0}</div><div class="l">Total runs</div></div>
+      <div class="metric"><div class="v num">${errRate}%</div><div class="l">Error rate</div></div>
+      <div class="metric"><div class="v num">${fmtk(t.tokens||0)}</div><div class="l">Tokens</div></div>
+      <div class="metric"><div class="v num">${t.cost!=null?'$'+(t.cost||0).toFixed(4):'—'}</div><div class="l">Estimated cost</div></div>
+      <div class="metric"><div class="v num">${t.llm_calls||0}</div><div class="l">LLM calls</div></div>
+    </div>
+    ${daily.length?`<div class="page-head"><h1 style="font-size:14px">Last ${s.days} days</h1><span class="sub">${db}</span></div>
+    <div class="charts">
+      ${chartCard('Runs / day',daily,d=>d.runs,'errors')}
+      ${chartCard('Tokens / day',daily,d=>d.tokens)}
+    </div>`:''}
+    ${models.length?`<div class="page-head"><h1 style="font-size:14px">Models</h1></div>
+    <div class="card" style="margin-bottom:14px"><div style="overflow:auto"><table>
+      <thead><tr><th>Model</th><th class="r">Calls</th><th class="r">In tokens</th><th class="r">Out tokens</th><th class="r">Cost</th><th class="r">Avg latency</th></tr></thead>
+      <tbody>${models.map(m=>`<tr>
+        <td style="font-weight:600">${esc(m.model)}</td>
+        <td class="r num">${m.calls}</td>
+        <td class="r num">${m.prompt_tokens!=null?fmtk(m.prompt_tokens):'—'}</td>
+        <td class="r num">${m.completion_tokens!=null?fmtk(m.completion_tokens):'—'}</td>
+        <td class="r num">${m.cost!=null?'$'+m.cost.toFixed(4):'—'}</td>
+        <td class="r num mono">${fmtms(Math.round(m.avg_ms||0))}</td></tr>`).join('')}</tbody></table></div></div>`:''}
+    <div class="page-head"><h1 style="font-size:14px">Average latency per node</h1></div>
+    <div class="card">${(s.per_node||[]).map(n=>`<div class="latrow"><div class="latname">${esc(n.name)}</div>
+      <div class="lattrack"><div class="latfill" style="width:${(n.avg_ms||0)/max*100}%"></div></div>
+      <div class="latms">${Math.round(n.avg_ms||0)} ms</div></div>`).join('')||'<div class="empty">No node timings yet</div>'}</div>`;
+}
+
+/* ---------- misc ---------- */
+function closeAll(){ $('#scrim').classList.remove('on'); $('#drawer').classList.remove('on'); $('#modal').classList.remove('on'); }
+function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function fmtms(ms){ return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s'; }
+function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
+function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
+let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),2600); }
+
+loadGraph(); liveTopology();
+/* deep links: #runs #sessions #stats #run=<id> */
+(function(){ const h=location.hash.slice(1);
+  if(h==='runs'||h==='sessions'||h==='stats') switchView(h);
+  else if(h.startsWith('run=')){ switchView('runs'); openRun(h.slice(4)); }
+})();
+</script>
+</body>
+</html>
