@@ -1,4 +1,5 @@
-# Windhover
+<p align="center"><img src="docs/logo.svg" width="112" alt="Windhover — a hovering kestrel"></p>
+<h1 align="center">Windhover</h1>
 
 > *Windhover* — the old poetic name for the kestrel, the falcon that hangs motionless
 > in the wind, watching everything below. This tool does the same for your agent graphs.
