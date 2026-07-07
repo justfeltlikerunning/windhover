@@ -17,6 +17,7 @@ class Config:
     watch: bool               # live-topology file watcher
     pricing_path: str
     retention_days: int       # 0 = keep runs forever
+    token: str                # WINDHOVER_TOKEN: require Bearer/query token on /api ("" = open)
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -29,4 +30,5 @@ class Config:
             watch=os.environ.get("WINDHOVER_WATCH", "1") not in ("0", "false", "no"),
             pricing_path=os.environ.get("WINDHOVER_PRICING", str(PKG_DIR / "pricing.json")),
             retention_days=int(os.environ.get("WINDHOVER_RETENTION_DAYS", "0") or 0),
+            token=os.environ.get("WINDHOVER_TOKEN", ""),
         )

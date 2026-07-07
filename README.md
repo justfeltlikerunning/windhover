@@ -1,5 +1,10 @@
 <p align="center"><img src="docs/logo.svg" width="112" alt="Windhover — a hovering kestrel"></p>
 <h1 align="center">Windhover</h1>
+<p align="center">
+  <a href="https://pypi.org/project/windhover/"><img src="https://img.shields.io/pypi/v/windhover" alt="PyPI"></a>
+  <a href="https://github.com/justfeltlikerunning/windhover/actions/workflows/ci.yml"><img src="https://github.com/justfeltlikerunning/windhover/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <img src="https://img.shields.io/badge/license-MIT-8E2434" alt="MIT">
+</p>
 
 > *Windhover* — the old poetic name for the kestrel, the falcon that hangs motionless
 > in the wind, watching everything below. This tool does the same for your agent graphs.
@@ -24,8 +29,8 @@ your own app. No LangSmith account, no cloud tunnel, no fragile websocket. HTTP 
 
 ## Quick start
 ```bash
-pip install fastapi uvicorn langgraph
-WINDHOVER_GRAPH=windhover.demo_graph:graph python -m windhover.server   # -> :8090
+pip install windhover langgraph
+WINDHOVER_GRAPH=windhover.demo_graph:graph windhover   # -> :8090
 ```
 Open `http://<host>:8090`. **New run** (input pre-filled from the graph's schema) →
 watch it execute → **Runs** for history, span trees, and replay → **Stats** for cost/latency.
@@ -66,10 +71,26 @@ graph.invoke(input, config={
   status/tag/session filters, bookmarks, pagination, CSV/JSON export.
 - **Sessions** — group runs into threads/batches; roll-up tokens, cost, errors.
 - **Scores** — attach numeric evals to runs (API or UI): eval harnesses, LLM-as-judge, human review.
+- **Live tail** — open a running run and watch its spans arrive in real time.
+- **Time-travel** — checkpointed graphs get a per-thread checkpoint browser: state, writes,
+  and next-nodes at every superstep (`get_state_history`).
+- **Run diff** — compare any two runs node-by-node: identical vs differing outputs,
+  duration and token deltas.
+- **Datasets / batch eval** — store golden input sets, run the graph over them, and get an
+  `expected_match` score per item (see Datasets on the Stats page).
 - **Run history + replay** — SQLite; runs persist even if the browser closes (worker thread).
 - **Living graph** — file watcher re-extracts topology in a subprocess and pushes it to the UI.
 - **Dashboards** — runs/tokens per day, per-model usage and latency, per-node latency, error rate.
 - **Mobile-first PWA**, light/dark. Fully local (FastAPI + Cytoscape.js).
+
+## Datasets API
+```bash
+curl -X POST :8090/api/datasets -H 'Content-Type: application/json' -d '{
+  "name": "golden", "items": [
+    {"input": {"n": 2},  "expected": 6},
+    {"input": {"n": 40}, "expected": "big"}]}'
+curl -X POST :8090/api/datasets/golden/run   # -> runs land in an eval:golden:<ts> session
+```
 
 ## Scores API
 ```bash
@@ -80,7 +101,9 @@ curl -X POST :8090/api/runs/RUN_ID/scores -H 'Content-Type: application/json' \
 ## Config (env)
 `WINDHOVER_GRAPH` (module:attr; unset = ingest-only) · `WINDHOVER_GRAPH_DIR` · `WINDHOVER_DB`
 · `WINDHOVER_HOST`/`WINDHOVER_PORT` (0.0.0.0/8090) · `WINDHOVER_WATCH` (1) · `WINDHOVER_PRICING`
-· `WINDHOVER_RETENTION_DAYS` (0 = keep forever; else prune older runs on startup + every 6h).
+· `WINDHOVER_RETENTION_DAYS` (0 = keep forever; else prune older runs on startup + every 6h)
+· `WINDHOVER_TOKEN` (set to require `Authorization: Bearer <token>` — or `?token=` — on all
+`/api` routes; the UI prompts once and remembers it).
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
 
 ## Notes

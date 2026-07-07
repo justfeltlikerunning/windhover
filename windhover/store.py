@@ -13,7 +13,7 @@ from __future__ import annotations
 import json, os, sqlite3, threading, time, uuid
 from typing import Any, Optional
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 _lock = threading.Lock()
 
 
@@ -56,6 +56,8 @@ class Store:
             CREATE TABLE IF NOT EXISTS scores(
               id TEXT PRIMARY KEY, run_id TEXT, name TEXT, value REAL,
               comment TEXT, source TEXT, created_ms INTEGER);
+            CREATE TABLE IF NOT EXISTS datasets(
+              id TEXT PRIMARY KEY, name TEXT UNIQUE, items TEXT, created_ms INTEGER);
             CREATE INDEX IF NOT EXISTS ix_spans_run ON spans(run_id, seq);
             CREATE INDEX IF NOT EXISTS ix_runs_started ON runs(started_ms DESC);
             CREATE INDEX IF NOT EXISTS ix_runs_session ON runs(session);
@@ -64,6 +66,8 @@ class Store:
             cols = [r[1] for r in c.execute("PRAGMA table_info(runs)").fetchall()]
             if "bookmarked" not in cols:
                 c.execute("ALTER TABLE runs ADD COLUMN bookmarked INTEGER DEFAULT 0")
+            if "thread_id" not in cols:
+                c.execute("ALTER TABLE runs ADD COLUMN thread_id TEXT")
             try:
                 c.execute("SELECT count(*) FROM json_each('[1]')")
                 self.has_json1 = True
@@ -118,11 +122,12 @@ class Store:
     def open_run(self, run: dict) -> None:
         with _lock, self._conn() as c:
             c.execute("""INSERT OR REPLACE INTO runs
-              (id,graph,source,status,session,tags,input,started_ms)
-              VALUES(?,?,?,?,?,?,?,?)""",
+              (id,graph,source,status,session,tags,input,started_ms,thread_id)
+              VALUES(?,?,?,?,?,?,?,?,?)""",
               (run["id"], run.get("graph"), run.get("source", "ui"), "running",
                run.get("session"), json.dumps(run.get("tags")),
-               json.dumps(run.get("input"), default=str), run["started_ms"]))
+               json.dumps(run.get("input"), default=str), run["started_ms"],
+               run.get("thread_id")))
 
     def add_span(self, s: dict) -> None:
         with _lock, self._conn() as c:
@@ -189,6 +194,36 @@ class Store:
     def delete_score(self, score_id: str) -> bool:
         with _lock, self._conn() as c:
             return c.execute("DELETE FROM scores WHERE id=?", (score_id,)).rowcount > 0
+
+    # ---- datasets -----------------------------------------------------------
+    def add_dataset(self, name: str, items: list) -> dict:
+        ds = {"id": uuid.uuid4().hex[:12], "name": str(name),
+              "items": items, "created_ms": int(time.time() * 1000)}
+        with _lock, self._conn() as c:
+            c.execute("""INSERT OR REPLACE INTO datasets(id,name,items,created_ms)
+                         VALUES(?,?,?,?)""",
+                      (ds["id"], ds["name"], json.dumps(items, default=str), ds["created_ms"]))
+        return ds
+
+    def datasets(self) -> list[dict]:
+        with _lock, self._conn() as c:
+            rows = [dict(r) for r in c.execute(
+                "SELECT id,name,items,created_ms FROM datasets ORDER BY created_ms DESC").fetchall()]
+        for r in rows:
+            r["items"] = json.loads(r["items"]) if r.get("items") else []
+            r["n_items"] = len(r["items"])
+        return rows
+
+    def dataset(self, ds_id: str):
+        for d in self.datasets():
+            if d["id"] == ds_id or d["name"] == ds_id:
+                return d
+        return None
+
+    def delete_dataset(self, ds_id: str) -> bool:
+        with _lock, self._conn() as c:
+            return c.execute("DELETE FROM datasets WHERE id=? OR name=?",
+                             (ds_id, ds_id)).rowcount > 0
 
     def prune(self, days: int) -> dict:
         """Delete runs (and their spans/scores/index rows) older than `days`."""

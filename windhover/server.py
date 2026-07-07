@@ -15,7 +15,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import Config
 from .store import Store
-from .tracer import SpanBuilder, db_sink, apply_to_store
+from .tracer import SpanBuilder, db_sink, apply_to_store, _trunc
 
 cfg = Config.from_env()
 store = Store(cfg.db_path)
@@ -28,6 +28,27 @@ if cfg.graph_ref:
     graph = getattr(importlib.import_module(_m), _a)
 
 app = FastAPI(title="Windhover")
+
+
+def _auth_ok(token: str, path: str, auth_header: str, query_token: str) -> bool:
+    """True when the request may proceed. Only /api is gated; static/UI stay
+    open (they contain no data — every payload comes through /api)."""
+    if not token or not path.startswith("/api"):
+        return True
+    supplied = (auth_header or "").strip()
+    if supplied.lower().startswith("bearer "):
+        supplied = supplied[7:].strip()
+    return supplied == token or (query_token or "") == token
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    if not _auth_ok(cfg.token, request.url.path,
+                    request.headers.get("authorization", ""),
+                    request.query_params.get("token", "")):
+        return JSONResponse({"error": "unauthorized — supply WINDHOVER_TOKEN as "
+                            "Bearer header or ?token="}, 401)
+    return await call_next(request)
 
 
 # ---- topology manager (subprocess extraction, mtime-cached) ---------------
@@ -152,14 +173,20 @@ async def api_run(request: Request):
         payload = {}
     session = payload.pop("_session", None)
     tags = payload.pop("_tags", None)
+    thread = payload.pop("_thread", None)
     tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref, session=session, tags=tags)
     run_id = tracer.run_id
+    config = {"callbacks": [tracer]}
+    if thread or getattr(graph, "checkpointer", None) is not None:
+        # a checkpointed graph needs a thread; default to the run id so
+        # time-travel works out of the box
+        config["configurable"] = {"thread_id": thread or run_id}
     q: "queue.Queue" = queue.Queue()
 
     def worker():
         try:
             interrupted = False
-            for update in graph.stream(payload, config={"callbacks": [tracer]},
+            for update in graph.stream(payload, config=config,
                                        stream_mode="updates"):
                 for node in update:
                     if node == "__interrupt__":
@@ -285,6 +312,99 @@ def api_node_source(name: str):
         return JSONResponse(src)
     return JSONResponse({"error": "no source available for this node "
                         "(external-only run, or a runnable inspect can't trace)"}, 404)
+
+
+@app.get("/api/threads/{thread_id}/history")
+def api_thread_history(thread_id: str, limit: int = 80):
+    """Time-travel: LangGraph checkpoint history for a thread (local graph
+    with a checkpointer only)."""
+    if graph is None or getattr(graph, "checkpointer", None) is None:
+        return JSONResponse({"error": "no local graph with a checkpointer"}, 404)
+    steps = []
+    try:
+        for st in graph.get_state_history({"configurable": {"thread_id": thread_id}}):
+            md = st.metadata or {}
+            steps.append({
+                "checkpoint_id": ((st.config or {}).get("configurable") or {}).get("checkpoint_id"),
+                "step": md.get("step"),
+                "source": md.get("source"),
+                "writes": _trunc(md.get("writes"), 2000) if md.get("writes") is not None else None,
+                "next": list(st.next or []),
+                "values": _trunc(st.values, 3000),
+                "created_at": str(getattr(st, "created_at", "") or "") or None,
+            })
+            if len(steps) >= limit:
+                break
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
+    return JSONResponse({"thread_id": thread_id, "steps": steps})
+
+
+@app.get("/api/datasets")
+def api_datasets():
+    return JSONResponse([{k: d[k] for k in ("id", "name", "n_items", "created_ms")}
+                         for d in store.datasets()])
+
+
+@app.post("/api/datasets")
+async def api_dataset_add(request: Request):
+    body = await request.json()
+    name, items = body.get("name"), body.get("items")
+    if not name or not isinstance(items, list) or not items:
+        return JSONResponse({"error": "requires name and a non-empty items list "
+                            "[{input: {...}, expected?: ...}]"}, 400)
+    for it in items:
+        if not isinstance(it, dict) or "input" not in it:
+            return JSONResponse({"error": "every item needs an input object"}, 400)
+    ds = store.add_dataset(str(name), items)
+    return JSONResponse({"id": ds["id"], "name": ds["name"], "n_items": len(items)})
+
+
+@app.delete("/api/datasets/{ds_id}")
+def api_dataset_delete(ds_id: str):
+    return JSONResponse({"ok": store.delete_dataset(ds_id)})
+
+
+def _expected_score(expected, output) -> float:
+    """Naive match: exact for scalars, substring against the JSON otherwise."""
+    try:
+        if isinstance(expected, (int, float, bool)):
+            return 1.0 if any(v == expected for v in
+                              (output.values() if isinstance(output, dict) else [output])) else 0.0
+        return 1.0 if str(expected) in json.dumps(output, default=str) else 0.0
+    except Exception:
+        return 0.0
+
+
+@app.post("/api/datasets/{ds_id}/run")
+def api_dataset_run(ds_id: str):
+    """Batch-eval: run the local graph over every dataset item; expected values
+    become an expected_match score on each run. Fire-and-forget worker."""
+    if graph is None:
+        return JSONResponse({"error": "no local graph (WINDHOVER_GRAPH unset)"}, 400)
+    ds = store.dataset(ds_id)
+    if not ds:
+        return JSONResponse({"error": "dataset not found"}, 404)
+    session = f"eval:{ds['name']}:{int(time.time())}"
+
+    def worker():
+        for i, item in enumerate(ds["items"]):
+            tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref,
+                                 session=session, tags=[f"dataset:{ds['name']}"])
+            config = {"callbacks": [tracer]}
+            if getattr(graph, "checkpointer", None) is not None:
+                config["configurable"] = {"thread_id": tracer.run_id}
+            try:
+                out = graph.invoke(dict(item["input"]), config=config)
+            except Exception:
+                continue  # tracer already recorded the error run
+            if "expected" in item:
+                store.add_score(tracer.run_id, "expected_match",
+                                _expected_score(item["expected"], out),
+                                comment=f"item {i}", source="dataset")
+
+    threading.Thread(target=worker, daemon=True).start()
+    return JSONResponse({"ok": True, "session": session, "items": len(ds["items"])})
 
 
 @app.get("/api/stats")

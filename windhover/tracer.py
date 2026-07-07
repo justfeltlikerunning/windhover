@@ -179,7 +179,8 @@ class SpanBuilder(BaseCallbackHandler):
             self.tags = merged or None
             self._emit({"kind": "run_open", "run_id": self.run_id, "graph": self.run_name,
                         "input": _trunc(inputs), "started_ms": int(self._t0 * 1000),
-                        "session": self.session, "tags": self.tags})
+                        "session": self.session, "tags": self.tags,
+                        "thread_id": md.get("thread_id")})
         if node:
             sid = uuid.uuid4().hex[:12]
             self._span_of[run_id] = sid
@@ -295,7 +296,8 @@ def apply_to_store(store, ev: dict, source: str = "ui") -> None:
     if kind == "run_open":
         store.open_run({"id": ev["run_id"], "graph": ev.get("graph"), "source": source,
                         "session": ev.get("session"), "tags": ev.get("tags"),
-                        "input": ev.get("input"), "started_ms": ev["started_ms"]})
+                        "input": ev.get("input"), "started_ms": ev["started_ms"],
+                        "thread_id": ev.get("thread_id")})
     elif kind == "span":
         store.add_span(ev)
     elif kind == "run_close":

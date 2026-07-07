@@ -130,6 +130,73 @@ td.r,th.r{text-align:right}
 .empty{padding:56px 20px;text-align:center;color:var(--muted)}
 .empty .t{font-weight:600;color:var(--text2);margin-bottom:4px}
 
+/* ---------- time-travel (checkpoint history) ---------- */
+window.showHistory=async(tid)=>{
+  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history');
+    d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
+  const steps=d.steps||[];
+  $('#d-title').textContent='thread '+tid.slice(0,10)+' · time-travel';
+  const st=$('#d-status'); st.className='status done'; $('#d-status-t').textContent=steps.length+' checkpoints';
+  $('#d-meta').innerHTML='<span>newest first — every LangGraph checkpoint for this thread</span>';
+  $('#d-body').innerHTML=steps.map((s,i)=>{
+    const did='tt'+i;
+    const writes=s.writes&&typeof s.writes==='object'?Object.keys(s.writes):[];
+    return `<div>
+      <div class="tr-row flat" onclick="tog('${did}',this)">
+        <div class="tr-main"><span class="caret">▶</span>
+          <span class="chip node">step ${s.step??'—'}</span>
+          <span class="tr-name">${esc(s.source||'')}</span>
+          ${writes.map(w=>`<span class="tagchip" style="cursor:default">${esc(w)}</span>`).join('')}
+          ${(s.next||[]).length?`<span class="mono" style="color:var(--muted);font-size:11px">→ ${esc((s.next||[]).join(', '))}</span>`:''}</div>
+        <div class="tr-meta">${s.created_at?esc(String(s.created_at).slice(11,19)):''}</div>
+      </div>
+      <div class="tr-detail" id="${did}">
+        ${s.writes!=null?kv('writes',s.writes):''}
+        ${kv('state at this checkpoint',s.values)}
+      </div></div>`;
+  }).join('')||'<div class="empty">No checkpoints recorded for this thread</div>';
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+};
+
+/* ---------- run diff ---------- */
+window.pickDiff=async(id)=>{
+  if(!window.__diffA||window.__diffA===id){ window.__diffA=id; toast('Compare: pick a second run (open it, hit compare)'); return; }
+  const a=window.__diffA; window.__diffA=null;
+  const [ra,rb]=await Promise.all([fetch('/api/runs/'+a).then(r=>r.json()),
+                                   fetch('/api/runs/'+id).then(r=>r.json())]);
+  const tops=r=>r.spans.filter(s=>!s.parent_id&&s.type==='node');
+  const A=tops(ra),B=tops(rb);
+  const names=[...new Set([...A.map(s=>s.name),...B.map(s=>s.name)])];
+  $('#d-title').textContent='diff · '+a.slice(0,8)+' ↔ '+id.slice(0,8);
+  const st=$('#d-status'); st.className='status done'; $('#d-status-t').textContent='compare';
+  const delta=(x,y,f)=>{const va=x?.[f],vb=y?.[f]; if(va==null&&vb==null)return '';
+    return `<span class="mono" style="font-size:11px;color:var(--muted)">${va??'—'} → ${vb??'—'}</span>`;};
+  $('#d-meta').innerHTML=[
+    `<span>A <b class="mono">${esc(ra.graph||'')} ${a.slice(0,8)}</b></span>`,
+    `<span>B <b class="mono">${esc(rb.graph||'')} ${id.slice(0,8)}</b></span>`,
+    `<span>duration ${delta(ra,rb,'duration_ms')}</span>`,
+    `<span>tokens ${delta(ra,rb,'total_tokens')}</span>`].join('');
+  $('#d-body').innerHTML=names.map((n,i)=>{
+    const sa=A.find(s=>s.name===n),sb=B.find(s=>s.name===n);
+    const ja=JSON.stringify(sa?.output??null),jb=JSON.stringify(sb?.output??null);
+    const same=ja===jb;
+    const did='df'+i;
+    return `<div>
+      <div class="tr-row flat" onclick="tog('${did}',this)">
+        <div class="tr-main"><span class="caret">▶</span><span class="chip node">${esc(n)}</span>
+          <span class="tr-name" style="color:${same?'var(--muted)':'var(--err)'}">${same?'≡ identical output':'≠ outputs differ'}</span></div>
+        <div class="tr-meta">${sa?.dur_ms??'—'} / ${sb?.dur_ms??'—'} ms</div>
+      </div>
+      <div class="tr-detail" id="${did}">
+        <div class="diffgrid">
+          <div class="kv"><div class="k">A · ${esc(n)}</div><pre>${esc(JSON.stringify(sa?.output??'(absent)',null,2))}</pre></div>
+          <div class="kv"><div class="k">B · ${esc(n)}</div><pre>${esc(JSON.stringify(sb?.output??'(absent)',null,2))}</pre></div>
+        </div>
+      </div></div>`;
+  }).join('');
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+};
+
 /* ---------- stats ---------- */
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
 .metric{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);padding:14px 16px}
@@ -185,6 +252,8 @@ td.r,th.r{text-align:right}
 .code .errline{background:var(--err-weak)}
 .code .cl.errline{box-shadow:inset 3px 0 0 var(--err);padding-left:6px;margin-left:-6px}
 .errhint{font:11px var(--mono);color:var(--err);margin-top:3px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.diffgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+@media(max-width:840px){.diffgrid{grid-template-columns:1fr}}
 .kv{margin:8px 0}
 .kv .k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
 .copy{font-size:10.5px;color:var(--accent-text);background:var(--accent-weak);border-radius:5px;padding:1px 7px}
@@ -317,7 +386,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="sessions">${ICON.layers} Sessions</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.7</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.8</span></div>
   </aside>
 
   <main>
@@ -429,6 +498,16 @@ const ICON = {
 document.body.innerHTML = document.body.innerHTML.replaceAll(/\$\{ICON\.(\w+)\}/g,(m,k)=>ICON[k]||'');
 
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+/* optional WINDHOVER_TOKEN auth: attach Bearer to /api calls; prompt once on 401 */
+const _fetch=window.fetch.bind(window);
+window.whToken=()=>localStorage.getItem('wh-token')||'';
+window.fetch=(u,o={})=>{ const t=whToken();
+  if(t&&String(u).startsWith('/api')) o={...o,headers:{...(o.headers||{}),'Authorization':'Bearer '+t}};
+  return _fetch(u,o).then(r=>{ if(r.status===401&&String(u).startsWith('/api')&&!window.__askedTok){
+      window.__askedTok=true;
+      const v=window.prompt('This Windhover requires an access token (WINDHOVER_TOKEN):');
+      if(v){ localStorage.setItem('wh-token',v.trim()); location.reload(); } }
+    return r; }); };
 let cy=null, VIEW='graph';
 
 /* ---------- theme ---------- */
@@ -563,7 +642,7 @@ async function openNode(name){
   $('#d-body').innerHTML=html;
   $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
 }
-function liveTopology(){ try{ const es=new EventSource('/api/events');
+function liveTopology(){ try{ const es=new EventSource('/api/events'+(whToken()?'?token='+encodeURIComponent(whToken()):''));
   es.addEventListener('topology',async()=>{ await loadGraph(true); toast('Graph definition changed — view updated'); });
   es.onerror=()=>{ es.close(); $('#foot-note').textContent='reconnecting…'; setTimeout(liveTopology,5000); };
   es.onopen=()=>{ $('#foot-note').textContent='watching'; };
@@ -576,7 +655,7 @@ function switchView(v){ VIEW=v;
   $('#crumb').textContent=v[0].toUpperCase()+v.slice(1);
   for(const k of ['graph','runs','sessions','stats'])
     $('#view-'+k).style.display=v===k?'':'none';
-  if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='stats')loadStats();
+  if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='stats'){loadStats();loadDatasets();}
   if(cy&&v==='graph')setTimeout(()=>cy.resize(),40);
 }
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
@@ -654,7 +733,7 @@ window.toggleBook=async(id,b)=>{
   await fetch('/api/runs/'+id,{method:'PATCH',headers:{'Content-Type':'application/json'},
     body:JSON.stringify({bookmarked:!!b})});
   loadRuns();};
-window.exportRuns=fmt=>{const p=runParams();p.set('format',fmt);location='/api/export?'+p;};
+window.exportRuns=fmt=>{const p=runParams();p.set('format',fmt);if(whToken())p.set('token',whToken());location='/api/export?'+p;};
 let rqT; $('#rq').oninput=e=>{clearTimeout(rqT);rqT=setTimeout(()=>{RF.q=e.target.value.trim();RF.offset=0;loadRuns();},300);};
 $('#rstatus').onchange=e=>{RF.status=e.target.value;RF.offset=0;loadRuns();};
 $('#rbook').onclick=()=>{RF.bookmarked=!RF.bookmarked;$('#rbook').classList.toggle('on',RF.bookmarked);RF.offset=0;loadRuns();};
@@ -689,6 +768,8 @@ async function openRun(id){
     r.total_tokens?`<span><b class="num">${fmtk(r.total_tokens)}</b> tokens</span>`:'',
     r.cost_usd!=null?`<span><b class="num">$${r.cost_usd.toFixed(5)}</b> cost</span>`:'',
     r.session?`<span>session <b class="mono">${esc(r.session)}</b></span>`:'',
+    r.thread_id?`<span>thread <b class="mono">${esc(r.thread_id)}</b> <button class="copy" onclick="showHistory('${esc(r.thread_id)}')">time-travel</button></span>`:'',
+    `<span><button class="copy" onclick="pickDiff('${id}')">compare</button></span>`,
     (r.tags||[]).length?`<span>${r.tags.map(t=>`<span class="tagchip">${esc(t)}</span>`).join('')}</span>`:'',
     `<span>${new Date(r.started_ms).toLocaleString()}</span>`,
   ].filter(Boolean).join('');
@@ -714,8 +795,15 @@ async function openRun(id){
       <button class="btn ghost" onclick="addScore('${id}')">Add score</button>
     </div>`;
   html += `<div style="margin-top:6px"><button class="btn ghost" onclick='replay(${JSON.stringify(r.spans.filter(s=>s.type==="node").map(s=>({n:s.name,e:s.status==="error"})))})'>⟲ Replay on graph</button></div>`;
+  const openIds=[...document.querySelectorAll('#d-body .tr-detail')]
+    .filter(e=>e.style.display==='block').map(e=>e.id);
   $('#d-body').innerHTML=html;
+  openIds.forEach(i=>{const e=document.getElementById(i); if(e){e.style.display='block';
+    const row=e.previousElementSibling; row&&row.querySelector('.caret')?.classList.add('open');}});
   $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+  clearTimeout(window.__liveT);
+  if(r.status==='running')
+    window.__liveT=setTimeout(()=>{ if($('#drawer').classList.contains('on')&&window.__run&&window.__run.id===id) openRun(id); },1500);
 }
 window.addScore=async(id)=>{
   const name=$('#sc-name').value.trim(), value=parseFloat($('#sc-val').value);
@@ -779,6 +867,73 @@ window.showSpanSource=async(sid)=>{
                   :'<pre>no source available for this node (external run, or inspect could not trace it)</pre>';
 };
 
+/* ---------- time-travel (checkpoint history) ---------- */
+window.showHistory=async(tid)=>{
+  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history');
+    d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
+  const steps=d.steps||[];
+  $('#d-title').textContent='thread '+tid.slice(0,10)+' · time-travel';
+  const st=$('#d-status'); st.className='status done'; $('#d-status-t').textContent=steps.length+' checkpoints';
+  $('#d-meta').innerHTML='<span>newest first — every LangGraph checkpoint for this thread</span>';
+  $('#d-body').innerHTML=steps.map((s,i)=>{
+    const did='tt'+i;
+    const writes=s.writes&&typeof s.writes==='object'?Object.keys(s.writes):[];
+    return `<div>
+      <div class="tr-row flat" onclick="tog('${did}',this)">
+        <div class="tr-main"><span class="caret">▶</span>
+          <span class="chip node">step ${s.step??'—'}</span>
+          <span class="tr-name">${esc(s.source||'')}</span>
+          ${writes.map(w=>`<span class="tagchip" style="cursor:default">${esc(w)}</span>`).join('')}
+          ${(s.next||[]).length?`<span class="mono" style="color:var(--muted);font-size:11px">→ ${esc((s.next||[]).join(', '))}</span>`:''}</div>
+        <div class="tr-meta">${s.created_at?esc(String(s.created_at).slice(11,19)):''}</div>
+      </div>
+      <div class="tr-detail" id="${did}">
+        ${s.writes!=null?kv('writes',s.writes):''}
+        ${kv('state at this checkpoint',s.values)}
+      </div></div>`;
+  }).join('')||'<div class="empty">No checkpoints recorded for this thread</div>';
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+};
+
+/* ---------- run diff ---------- */
+window.pickDiff=async(id)=>{
+  if(!window.__diffA||window.__diffA===id){ window.__diffA=id; toast('Compare: pick a second run (open it, hit compare)'); return; }
+  const a=window.__diffA; window.__diffA=null;
+  const [ra,rb]=await Promise.all([fetch('/api/runs/'+a).then(r=>r.json()),
+                                   fetch('/api/runs/'+id).then(r=>r.json())]);
+  const tops=r=>r.spans.filter(s=>!s.parent_id&&s.type==='node');
+  const A=tops(ra),B=tops(rb);
+  const names=[...new Set([...A.map(s=>s.name),...B.map(s=>s.name)])];
+  $('#d-title').textContent='diff · '+a.slice(0,8)+' ↔ '+id.slice(0,8);
+  const st=$('#d-status'); st.className='status done'; $('#d-status-t').textContent='compare';
+  const delta=(x,y,f)=>{const va=x?.[f],vb=y?.[f]; if(va==null&&vb==null)return '';
+    return `<span class="mono" style="font-size:11px;color:var(--muted)">${va??'—'} → ${vb??'—'}</span>`;};
+  $('#d-meta').innerHTML=[
+    `<span>A <b class="mono">${esc(ra.graph||'')} ${a.slice(0,8)}</b></span>`,
+    `<span>B <b class="mono">${esc(rb.graph||'')} ${id.slice(0,8)}</b></span>`,
+    `<span>duration ${delta(ra,rb,'duration_ms')}</span>`,
+    `<span>tokens ${delta(ra,rb,'total_tokens')}</span>`].join('');
+  $('#d-body').innerHTML=names.map((n,i)=>{
+    const sa=A.find(s=>s.name===n),sb=B.find(s=>s.name===n);
+    const ja=JSON.stringify(sa?.output??null),jb=JSON.stringify(sb?.output??null);
+    const same=ja===jb;
+    const did='df'+i;
+    return `<div>
+      <div class="tr-row flat" onclick="tog('${did}',this)">
+        <div class="tr-main"><span class="caret">▶</span><span class="chip node">${esc(n)}</span>
+          <span class="tr-name" style="color:${same?'var(--muted)':'var(--err)'}">${same?'≡ identical output':'≠ outputs differ'}</span></div>
+        <div class="tr-meta">${sa?.dur_ms??'—'} / ${sb?.dur_ms??'—'} ms</div>
+      </div>
+      <div class="tr-detail" id="${did}">
+        <div class="diffgrid">
+          <div class="kv"><div class="k">A · ${esc(n)}</div><pre>${esc(JSON.stringify(sa?.output??'(absent)',null,2))}</pre></div>
+          <div class="kv"><div class="k">B · ${esc(n)}</div><pre>${esc(JSON.stringify(sb?.output??'(absent)',null,2))}</pre></div>
+        </div>
+      </div></div>`;
+  }).join('');
+  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+};
+
 /* ---------- stats ---------- */
 function chartCard(title,daily,val,errKey){
   const max=Math.max(1,...daily.map(d=>val(d)||0));
@@ -818,6 +973,8 @@ async function loadStats(){
         <td class="r num">${m.completion_tokens!=null?fmtk(m.completion_tokens):'—'}</td>
         <td class="r num">${m.cost!=null?'$'+m.cost.toFixed(4):'—'}</td>
         <td class="r num mono">${fmtms(Math.round(m.avg_ms||0))}</td></tr>`).join('')}</tbody></table></div></div>`:''}
+    <div class="page-head"><h1 style="font-size:14px">Datasets — batch eval</h1></div>
+    <div class="card" style="margin-bottom:14px"><div id="ds-wrap" style="padding:6px 8px"><div class="empty" style="padding:14px">Loading…</div></div></div>
     <div class="page-head"><h1 style="font-size:14px">Average latency per node</h1></div>
     <div class="card">${(s.per_node||[]).map(n=>`<div class="latrow"><div class="latname">${esc(n.name)}</div>
       <div class="lattrack"><div class="latfill" style="width:${(n.avg_ms||0)/max*100}%"></div></div>
@@ -832,6 +989,24 @@ function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
 function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
 let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),2600); }
 
+async function loadDatasets(){
+  const w=document.getElementById('ds-wrap'); if(!w) return;
+  let ds=[]; try{ ds=await(await fetch('/api/datasets')).json(); }catch(e){}
+  w.innerHTML=ds.length?ds.map(d=>`<div class="scorerow">
+      <span class="chip node">${esc(d.name)}</span>
+      <span style="color:var(--muted);font-size:12px">${d.n_items} items</span>
+      <span class="del" title="delete" onclick="delDataset('${d.id}')">×</span>
+      <button class="btn ghost" style="margin-left:auto;padding:4px 12px" onclick="runDataset('${d.id}','${esc(d.name)}')">Run eval</button>
+    </div>`).join('')
+    :`<div class="empty" style="padding:14px"><div class="t">No datasets yet</div>POST <span class="mono">/api/datasets</span> with <span class="mono">{name, items:[{input:{…}, expected:…}]}</span> — runs land in a session with an <span class="mono">expected_match</span> score per item.</div>`;
+}
+window.runDataset=async(id,name)=>{
+  const r=await fetch('/api/datasets/'+id+'/run',{method:'POST'});
+  const d=await r.json();
+  if(!r.ok) return toast(d.error||'eval failed to start');
+  toast('Eval started: '+d.items+' items → session '+d.session);
+};
+window.delDataset=async(id)=>{ await fetch('/api/datasets/'+id,{method:'DELETE'}); loadDatasets(); };
 loadGraph(); liveTopology();
 /* deep links: #runs #sessions #stats #run=<id> */
 (function(){ const h=location.hash.slice(1);

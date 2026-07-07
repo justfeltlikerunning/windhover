@@ -45,4 +45,8 @@ _g.add_edge("sign", "summarize")
 _g.add_edge("magnitude", "summarize")
 _g.add_edge("summarize", END)
 
-graph = _g.compile()
+try:  # checkpointer makes the Time-travel view demoable; optional dependency surface
+    from langgraph.checkpoint.memory import MemorySaver
+    graph = _g.compile(checkpointer=MemorySaver())
+except Exception:
+    graph = _g.compile()

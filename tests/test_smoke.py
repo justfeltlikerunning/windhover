@@ -244,6 +244,61 @@ def test_xray_topology():
     print("xray topology OK —", len(plain["nodes"]), "->", len(xray["nodes"]), "nodes")
 
 
+def test_auth_check():
+    os.environ.setdefault("WINDHOVER_DB", tempfile.mktemp(suffix=".db"))
+    from windhover.server import _auth_ok
+    assert _auth_ok("", "/api/runs", "", "")                     # no token configured -> open
+    assert _auth_ok("s3cret", "/", "", "")                       # UI shell never gated
+    assert _auth_ok("s3cret", "/static/x.js", "", "")
+    assert not _auth_ok("s3cret", "/api/runs", "", "")           # gated without creds
+    assert _auth_ok("s3cret", "/api/runs", "Bearer s3cret", "")
+    assert _auth_ok("s3cret", "/api/runs", "bearer  s3cret", "") # case/space tolerant
+    assert _auth_ok("s3cret", "/api/events", "", "s3cret")       # query token (SSE)
+    assert not _auth_ok("s3cret", "/api/runs", "Bearer wrong", "")
+    print("auth check OK")
+
+
+def test_thread_capture_and_history():
+    from typing import TypedDict
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import MemorySaver
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+
+    class St(TypedDict):
+        x: int
+    g = StateGraph(St)
+    g.add_node("inc", lambda st: {"x": st["x"] + 1})
+    g.add_edge(START, "inc"); g.add_edge("inc", END)
+    app = g.compile(checkpointer=MemorySaver())
+    tr = SpanBuilder(db_sink(s), run_name="tt")
+    app.invoke({"x": 1}, config={"callbacks": [tr],
+                                 "configurable": {"thread_id": "thread-9"}})
+    time.sleep(.1)
+    d = s.run_detail(tr.run_id)
+    assert d["thread_id"] == "thread-9", d["thread_id"]
+    steps = list(app.get_state_history({"configurable": {"thread_id": "thread-9"}}))
+    assert len(steps) >= 2   # input checkpoint + node step
+    print("thread capture + history OK —", len(steps), "checkpoints")
+
+
+def test_datasets_and_scoring():
+    os.environ.setdefault("WINDHOVER_DB", tempfile.mktemp(suffix=".db"))
+    from windhover.server import _expected_score
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    ds = s.add_dataset("golden", [{"input": {"n": 2}, "expected": 6},
+                                  {"input": {"n": 5}}])
+    assert s.datasets()[0]["n_items"] == 2
+    assert s.dataset("golden")["id"] == ds["id"]
+    assert _expected_score(6, {"n": 6}) == 1.0
+    assert _expected_score(7, {"n": 6}) == 0.0
+    assert _expected_score("flattened", {"answer": "tiers were flattened in Q3"}) == 1.0
+    assert _expected_score("missing", {"answer": "nope"}) == 0.0
+    assert s.delete_dataset("golden") and not s.datasets()
+    print("datasets + scoring OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -256,4 +311,7 @@ if __name__ == "__main__":
     test_retriever_spans()
     test_interrupt_status()
     test_xray_topology()
+    test_auth_check()
+    test_thread_capture_and_history()
+    test_datasets_and_scoring()
     print("ALL SMOKE TESTS PASSED")
