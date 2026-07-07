@@ -49,6 +49,19 @@ def cost_of(model: Optional[str], pt: Optional[int], ct: Optional[int]) -> Optio
     return round((pt or 0) / 1e6 * rate["input"] + (ct or 0) / 1e6 * rate["output"], 6)
 
 
+def _err_text(error: Any) -> str:
+    """Full traceback when we have one — the UI maps 'File …, line N' frames
+    onto node source so you can see exactly where a run broke."""
+    try:
+        if isinstance(error, BaseException) and error.__traceback__ is not None:
+            import traceback
+            return "".join(traceback.format_exception(
+                type(error), error, error.__traceback__))[-4000:]
+    except Exception:
+        pass
+    return str(error)
+
+
 def _trunc(v: Any, n: int = 4000) -> Any:
     s = json.dumps(v, default=str)
     return json.loads(s) if len(s) <= n else s[:n] + "…"
@@ -184,11 +197,12 @@ class SpanBuilder(BaseCallbackHandler):
 
     def on_chain_error(self, error, *, run_id=None, **kw):
         info = self._open.pop(run_id, None)
+        err = _err_text(error)
         if info:
-            self._finish_span(info, status="error", error=str(error))
+            self._finish_span(info, status="error", error=err)
         if run_id == self._root:
             self._emit({"kind": "run_close", "run_id": self.run_id, "status": "error",
-                        "ended_ms": int(time.time() * 1000), "error": str(error)})
+                        "ended_ms": int(time.time() * 1000), "error": err})
 
     # -- LLMs --
     def _llm_start(self, serialized, prompt, run_id, parent_run_id, kw):
@@ -216,7 +230,7 @@ class SpanBuilder(BaseCallbackHandler):
     def on_llm_error(self, error, *, run_id=None, **kw):
         info = self._open.pop(run_id, None)
         if info:
-            self._finish_span(info, status="error", error=str(error), model=info["name"])
+            self._finish_span(info, status="error", error=_err_text(error), model=info["name"])
 
     # -- tools --
     def on_tool_start(self, serialized, input_str, *, run_id=None, parent_run_id=None, **kw):
@@ -235,7 +249,7 @@ class SpanBuilder(BaseCallbackHandler):
     def on_tool_error(self, error, *, run_id=None, **kw):
         info = self._open.pop(run_id, None)
         if info:
-            self._finish_span(info, status="error", error=str(error))
+            self._finish_span(info, status="error", error=_err_text(error))
 
 
 def apply_to_store(store, ev: dict, source: str = "ui") -> None:

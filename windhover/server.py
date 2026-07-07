@@ -35,7 +35,7 @@ class Topo:
     def __init__(self):
         self.lock = threading.Lock()
         self.sig = None
-        self.data = {"topology": {"nodes": [], "edges": []}, "schema": {}}
+        self.data = {"topology": {"nodes": [], "edges": []}, "schema": {}, "sources": {}}
         self.hash = ""
         self.version = 0
 
@@ -79,6 +79,10 @@ class Topo:
     def schema(self) -> dict:
         with self.lock:
             return self.data.get("schema", {})
+
+    def sources(self) -> dict:
+        with self.lock:
+            return self.data.get("sources", {})
 
 
 TOPO = Topo()
@@ -267,6 +271,15 @@ def api_export(format: str = "json", limit: int = 10000, q: str = None,
 @app.get("/api/nodes/{name}")
 def api_node(name: str, limit: int = 25):
     return JSONResponse(store.node_history(name, limit))
+
+
+@app.get("/api/nodes/{name}/source")
+def api_node_source(name: str):
+    src = TOPO.sources().get(name)
+    if src:
+        return JSONResponse(src)
+    return JSONResponse({"error": "no source available for this node "
+                        "(external-only run, or a runnable inspect can't trace)"}, 404)
 
 
 @app.get("/api/stats")

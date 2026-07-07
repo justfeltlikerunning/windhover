@@ -18,7 +18,12 @@ class State(TypedDict):
     notes: Annotated[list, operator.add]
 
 
-def seed(s):       time.sleep(.2);  return {"n": s.get("n", 1)}
+def seed(s):
+    time.sleep(.2)
+    n = s.get("n", 1)
+    if n < 0:
+        raise ValueError(f"n must be non-negative, got {n} — the demo guard tripped")
+    return {"n": n}
 def grow(s):       time.sleep(.3);  return {"n": s["n"] * 3}
 def parity(s):     time.sleep(.4);  return {"notes": ["even" if s["n"] % 2 == 0 else "odd"]}
 def sign(s):       time.sleep(.25); return {"notes": ["positive" if s["n"] > 0 else "non-positive"]}

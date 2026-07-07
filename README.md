@@ -52,7 +52,9 @@ graph.invoke(input, config={
 ## Features
 - **Any graph** — topology from `graph.get_graph()`; input form from its state schema.
 - **Full trace tree** — nodes → nested LLM/tool spans, prompts, responses, tokens, cost, latency.
-- **Clickable graph** — tap a node for health, latency, wiring, and recent executions with payloads.
+- **Clickable graph** — tap a node for health, latency, wiring, its **source code**, and recent executions with payloads.
+- **Error forensics** — failed runs show the full traceback; the failing node turns red on the
+  graph, and the node's source renders with the **throwing line highlighted**.
 - **Search & filters** — full-text over prompts/payloads/errors (FTS5, LIKE fallback),
   status/tag/session filters, bookmarks, pagination, CSV/JSON export.
 - **Sessions** — group runs into threads/batches; roll-up tokens, cost, errors.

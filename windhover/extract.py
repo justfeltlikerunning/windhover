@@ -1,9 +1,10 @@
-"""Extract a compiled graph's topology as JSON. Run as a subprocess so the live
-watcher always sees current-on-disk code without importlib.reload fragility.
+"""Extract a compiled graph's topology, input schema, and per-node source as
+JSON. Run as a subprocess so the live watcher always sees current-on-disk code
+without importlib.reload fragility.
 
     python -m windhover.extract "module:attr" "/graph/dir"
 """
-import sys, json, importlib
+import sys, json, importlib, inspect, functools
 
 
 def topology(graph) -> dict:
@@ -27,6 +28,62 @@ def input_schema(graph) -> dict:
     return {}
 
 
+def _unwrap(fn):
+    """Peel partials, decorators, and bound methods down to the user function."""
+    seen = set()
+    while id(fn) not in seen:
+        seen.add(id(fn))
+        if isinstance(fn, functools.partial):
+            fn = fn.func
+        elif hasattr(fn, "__wrapped__"):
+            fn = fn.__wrapped__
+        elif inspect.ismethod(fn):
+            fn = fn.__func__
+        else:
+            break
+    return fn
+
+
+def _node_callable(graph, name):
+    """Best-effort: the user callable backing a LangGraph node. The compiled
+    graph keeps the builder's node specs; RunnableCallable exposes .func/.afunc."""
+    candidates = (
+        lambda: graph.builder.nodes[name].runnable.func,
+        lambda: graph.builder.nodes[name].runnable.afunc,
+        lambda: graph.builder.nodes[name].runnable,
+    )
+    for get in candidates:
+        try:
+            fn = get()
+        except Exception:
+            continue
+        if fn is not None:
+            return _unwrap(fn)
+    return None
+
+
+def sources(graph) -> dict:
+    """{node: {file, line_start, line_end, code}} for every node we can trace
+    to real source. Missing nodes simply aren't in the map — never an error."""
+    out = {}
+    builder = getattr(graph, "builder", None)
+    for name in (getattr(builder, "nodes", None) or {}):
+        fn = _node_callable(graph, name)
+        if fn is None:
+            continue
+        for target in (fn, type(fn)):  # class-based runnables: show the class
+            try:
+                lines, start = inspect.getsourcelines(target)
+                out[name] = {"file": inspect.getsourcefile(target) or "",
+                             "line_start": start,
+                             "line_end": start + len(lines) - 1,
+                             "code": "".join(lines)[:20000]}
+                break
+            except Exception:
+                continue
+    return out
+
+
 def load(ref: str, dir_: str):
     sys.path.insert(0, dir_)
     mod, attr = ref.split(":")
@@ -36,4 +93,5 @@ def load(ref: str, dir_: str):
 if __name__ == "__main__":
     ref, dir_ = sys.argv[1], sys.argv[2]
     g = load(ref, dir_)
-    print(json.dumps({"topology": topology(g), "schema": input_schema(g)}))
+    print(json.dumps({"topology": topology(g), "schema": input_schema(g),
+                      "sources": sources(g)}))

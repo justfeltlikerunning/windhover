@@ -173,6 +173,15 @@ td.r,th.r{text-align:right}
 .tr-bar.llm{background:#8b5cf6}.tr-bar.tool{background:#10b981}
 .tr-meta{text-align:right;color:var(--muted);font-family:var(--mono);font-size:11.5px}
 .tr-detail{margin:2px 0 8px 30px;border-left:2px solid var(--border);padding-left:12px;display:none}
+/* source viewer */
+.code{display:grid;grid-template-columns:auto 1fr;column-gap:12px;font:11.5px/1.65 var(--mono);
+  background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;
+  max-height:340px;overflow:auto;margin-top:4px}
+.code .ln{color:var(--muted);text-align:right;user-select:none;position:sticky;left:-12px;background:var(--surface2);padding-left:12px}
+.code .cl{white-space:pre}
+.code .errline{background:var(--err-weak)}
+.code .cl.errline{box-shadow:inset 3px 0 0 var(--err);padding-left:6px;margin-left:-6px}
+.errhint{font:11px var(--mono);color:var(--err);margin-top:3px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .kv{margin:8px 0}
 .kv .k{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:4px}
 .copy{font-size:10.5px;color:var(--accent-text);background:var(--accent-weak);border-radius:5px;padding:1px 7px}
@@ -473,9 +482,24 @@ function orientLabel(){ const b=$('#orient'); if(b) b.textContent=RANK==='TB'?'�
 window.toggleOrient=()=>{ RANK=RANK==='TB'?'LR':'TB'; localStorage.setItem('wh-rank',RANK); orientLabel(); relayout(); };
 orientLabel();
 
+/* ---------- source viewer helpers ---------- */
+function tbLines(err,src){ const out=new Set();
+  if(!err||!src) return out;
+  const base=(src.file||'').split('/').pop();
+  for(const m of String(err).matchAll(/File "([^"]+)", line (\d+)/g)){
+    if(m[1].split('/').pop()===base){ const ln=+m[2];
+      if(ln>=src.line_start&&ln<=src.line_end) out.add(ln); } }
+  return out; }
+function codeBlock(src,hi){ const lines=src.code.replace(/\n$/,'').split('\n');
+  return `<div class="code">${lines.map((l,i)=>{ const ln=src.line_start+i, h=hi.has(ln);
+    return `<span class="ln ${h?'errline':''}">${ln}</span><span class="cl ${h?'errline':''}">${esc(l)||' '}</span>`;
+  }).join('')}</div>`; }
+
 /* ---------- node pane (tap a node on the graph) ---------- */
 async function openNode(name){
   let d={}; try{ d=await(await fetch('/api/nodes/'+encodeURIComponent(name))).json(); }catch(e){}
+  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source');
+    if(rs.ok) src=await rs.json(); }catch(e){}
   const s=d.summary||{}, errs=s.errors||0;
   $('#d-title').textContent=name;
   const st=$('#d-status'); st.className='status '+(errs?'error':'done');
@@ -489,8 +513,13 @@ async function openNode(name){
     s.tokens?`<span><b class="num">${fmtk(s.tokens)}</b> tokens</span>`:'',
     s.cost!=null?`<span><b class="num">$${(+s.cost).toFixed(4)}</b> cost</span>`:'',
   ].filter(Boolean).join('');
-  let html=`<div class="kv"><div class="k">wiring</div><pre>${esc((inn.join(', ')||'START')+'  →  '+name+'  →  '+(out.join(', ')||'END'))}</pre></div>
-    <div class="kv"><div class="k">executions — newest first, expand for payloads</div></div>`;
+  window.__nodeSrc=src;
+  const hiAll=new Set();
+  if(src)(d.recent||[]).forEach(r=>{ if(r.error) tbLines(r.error,src).forEach(x=>hiAll.add(x)); });
+  let html=`<div class="kv"><div class="k">wiring</div><pre>${esc((inn.join(', ')||'START')+'  →  '+name+'  →  '+(out.join(', ')||'END'))}</pre></div>`;
+  if(src) html+=`<div class="kv"><div class="k">source · ${esc((src.file||'').split('/').pop())}:${src.line_start}${hiAll.size?` · <span style="color:var(--err)">error line${hiAll.size>1?'s':''} ${[...hiAll].join(', ')}</span>`:''}
+      <button class="copy" onclick="navigator.clipboard.writeText(__nodeSrc.code);toast('Copied source')">copy</button></div>${codeBlock(src,hiAll)}</div>`;
+  html+=`<div class="kv"><div class="k">executions — newest first, expand for payloads</div></div>`;
   html+=(d.recent||[]).length?d.recent.map((r,i)=>{
     const did='nx'+i, open=i===0;
     const kids=r.children||[];
@@ -590,6 +619,7 @@ async function loadRuns(){
       <td onclick="event.stopPropagation();toggleBook('${r.id}',${r.bookmarked?0:1})"><span class="star ${r.bookmarked?'on':''}">${r.bookmarked?'★':'☆'}</span></td>
       <td><span class="status ${r.status}"><span class="d"></span>${r.status}</span></td>
       <td><div style="font-weight:600">${esc(r.graph||'run')}</div><div class="mono">${r.id.slice(0,10)}</div>
+        ${r.status==='error'&&r.error?`<div class="errhint" title="open for traceback + source">${esc(String(r.error).trim().split('\n').filter(Boolean).pop().slice(0,90))}</div>`:''}
         ${(r.tags||[]).map(t=>`<span class="tagchip" onclick="event.stopPropagation();setTag(decodeURIComponent('${encodeURIComponent(t)}'))">${esc(t)}</span>`).join('')}</td>
       <td><span class="src">${r.source}</span>${r.session?`<div class="mono" style="font-size:10.5px;color:var(--muted);cursor:pointer" onclick="event.stopPropagation();RF.session=decodeURIComponent('${encodeURIComponent(r.session)}');RF.offset=0;loadRuns()">${esc(r.session)}</div>`:''}</td>
       <td class="r num">${r.node_count??0}</td>
@@ -635,6 +665,7 @@ async function loadSessions(){
 /* ---------- run drawer (span tree) ---------- */
 async function openRun(id){
   const r=await(await fetch('/api/runs/'+id)).json();
+  window.__run=r;
   $('#d-title').textContent=(r.graph||'run')+' · '+id.slice(0,8);
   const st=$('#d-status'); st.className='status '+r.status; $('#d-status-t').textContent=r.status;
   $('#d-meta').innerHTML=[
@@ -661,7 +692,7 @@ async function openRun(id){
       <input id="sc-com" placeholder="comment (optional)" style="flex:1;min-width:120px">
       <button class="btn ghost" onclick="addScore('${id}')">Add score</button>
     </div>`;
-  html += `<div style="margin-top:6px"><button class="btn ghost" onclick='replay(${JSON.stringify(r.spans.filter(s=>s.type==="node").map(s=>s.name))})'>⟲ Replay on graph</button></div>`;
+  html += `<div style="margin-top:6px"><button class="btn ghost" onclick='replay(${JSON.stringify(r.spans.filter(s=>s.type==="node").map(s=>({n:s.name,e:s.status==="error"})))})'>⟲ Replay on graph</button></div>`;
   $('#d-body').innerHTML=html;
   $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
 }
@@ -696,7 +727,7 @@ function renderSpans(list,byParent,total,depth){
       </div>
       <div class="tr-detail" id="${did}">
         ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}</pre></div>`:''}
-        ${s.error?`<div class="kv"><div class="k">error</div><pre class="err">${esc(s.error)}</pre></div>`:''}
+        ${s.error?`<div class="kv"><div class="k">error${s.type==='node'?`<button class="copy" onclick="showSpanSource('${s.id}')">view source</button>`:''}</div><pre class="err">${esc(s.error)}</pre><div id="src-${s.id}"></div></div>`:''}
         ${s.input!=null?kv('input',s.input):''}
         ${s.output!=null?kv('output',s.output):''}
         ${(!s.error&&s.input==null&&s.output==null&&!s.model)?'<div class="kv"><pre>no captured payload</pre></div>':''}
@@ -709,11 +740,23 @@ function kv(k,v){ const txt=typeof v==='string'?v:JSON.stringify(v,null,2);
   return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(this.closest('.kv').querySelector('pre').textContent);toast('Copied')">copy</button></div><pre>${esc(txt)}</pre></div>`; }
 window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
   el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
-window.replay=async(nodes)=>{ closeAll(); switchView('graph');
+window.replay=async(steps)=>{ closeAll(); switchView('graph');
   cy.nodes().removeClass('running done err'); cy.edges().removeClass('flow'); let prev='__start__';
-  for(const n of nodes){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id(n).addClass('running');
-    cy.edges(`[source="${prev}"][target="${n}"]`).addClass('flow'); prev=n; await new Promise(r=>setTimeout(r,380)); }
+  for(const raw of steps){ const st=typeof raw==='string'?{n:raw,e:false}:raw;
+    cy.$id(prev).addClass('done').removeClass('running');
+    cy.edges(`[source="${prev}"][target="${st.n}"]`).addClass('flow');
+    if(st.e){ cy.$id(st.n).addClass('err'); toast('Run failed at '+st.n+' — tap the node for its source'); return; }
+    cy.$id(st.n).addClass('running'); prev=st.n; await new Promise(r=>setTimeout(r,380)); }
   cy.$id(prev).addClass('done').removeClass('running'); cy.$id('__end__').addClass('done'); };
+window.showSpanSource=async(sid)=>{
+  const s=((window.__run||{}).spans||[]).find(x=>x.id===sid); if(!s) return;
+  const el=document.getElementById('src-'+sid); if(!el) return;
+  if(el.innerHTML){ el.innerHTML=''; return; }
+  let src=null; try{ const r=await fetch('/api/nodes/'+encodeURIComponent(s.name)+'/source');
+    if(r.ok) src=await r.json(); }catch(e){}
+  el.innerHTML=src?`<div class="k" style="margin-top:8px">source · ${esc((src.file||'').split('/').pop())}:${src.line_start}</div>${codeBlock(src,tbLines(s.error,src))}`
+                  :'<pre>no source available for this node (external run, or inspect could not trace it)</pre>';
+};
 
 /* ---------- stats ---------- */
 function chartCard(title,daily,val,errKey){

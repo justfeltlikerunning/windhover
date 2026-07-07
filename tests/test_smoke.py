@@ -135,6 +135,59 @@ def test_tracer_metadata_session_tags():
     print("tracer metadata session/tags OK")
 
 
+def _tiny_graph(fail=False):
+    from typing import TypedDict
+    from langgraph.graph import StateGraph, START, END
+
+    class St(TypedDict):
+        x: int
+
+    def boom(st):
+        raise RuntimeError("kaboom from boom()")
+
+    def inc(st):
+        return {"x": st["x"] + 1}
+
+    g = StateGraph(St)
+    g.add_node("inc", boom if fail else inc)
+    g.add_edge(START, "inc"); g.add_edge("inc", END)
+    return g.compile()
+
+
+def test_source_extraction():
+    from windhover.extract import sources
+    app = _tiny_graph()
+    src = sources(app)
+    assert "inc" in src, f"no source for inc: {list(src)}"
+    s = src["inc"]
+    assert "def inc(st):" in s["code"]
+    assert s["file"].endswith(".py") and s["line_start"] > 0
+    assert s["line_end"] >= s["line_start"]
+    print("source extraction OK —", s["file"].split("/")[-1], f"L{s['line_start']}")
+
+
+def test_error_traceback_capture():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    app = _tiny_graph(fail=True)
+    tracer = SpanBuilder(db_sink(s), run_name="failing")
+    try:
+        app.invoke({"x": 1}, config={"callbacks": [tracer]})
+        assert False, "graph should have raised"
+    except RuntimeError:
+        pass
+    time.sleep(.1)
+    d = s.run_detail(tracer.run_id)
+    assert d is not None and d["status"] == "error"
+    err_spans = [sp for sp in d["spans"] if sp["status"] == "error" and sp["type"] == "node"]
+    assert err_spans, "no error node span recorded"
+    err = err_spans[0]["error"]
+    # full traceback with file+line so the UI can highlight the source line
+    assert "Traceback" in err and 'File "' in err and "kaboom from boom()" in err
+    assert d["error"] and "kaboom" in d["error"]
+    print("error traceback capture OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -142,4 +195,6 @@ if __name__ == "__main__":
     test_search_filters_scores_sessions()
     test_prune_and_stats()
     test_tracer_metadata_session_tags()
+    test_source_extraction()
+    test_error_traceback_capture()
     print("ALL SMOKE TESTS PASSED")
