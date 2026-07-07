@@ -74,7 +74,7 @@ class Topo:
     def get(self) -> dict:
         with self.lock:
             return {**self.data["topology"], "graph": cfg.graph_ref, "hash": self.hash,
-                    "version": self.version}
+                    "version": self.version, "xray": self.data.get("topology_xray")}
 
     def schema(self) -> dict:
         with self.lock:
@@ -158,11 +158,16 @@ async def api_run(request: Request):
 
     def worker():
         try:
+            interrupted = False
             for update in graph.stream(payload, config={"callbacks": [tracer]},
                                        stream_mode="updates"):
                 for node in update:
-                    q.put(("node", {"node": node}))
-            q.put(("done", {"run_id": run_id}))
+                    if node == "__interrupt__":
+                        interrupted = True
+                        q.put(("interrupt", {"run_id": run_id}))
+                    else:
+                        q.put(("node", {"node": node}))
+            q.put(("interrupted" if interrupted else "done", {"run_id": run_id}))
         except Exception as e:
             # tracer already recorded the error span/close; surface to the client too
             q.put(("error", {"message": str(e), "trace": traceback.format_exc()[-600:]}))
@@ -312,7 +317,8 @@ def manifest():
 
 @app.get("/")
 def index():
-    return FileResponse(STATIC / "index.html")
+    # no-cache so UI upgrades take effect on next load (vendor assets still cache)
+    return FileResponse(STATIC / "index.html", headers={"Cache-Control": "no-cache"})
 
 
 app.mount("/static", StaticFiles(directory=STATIC), name="static")

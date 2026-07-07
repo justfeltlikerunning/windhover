@@ -27,7 +27,7 @@
   --accent:#8E2434; --accent-weak:#F7E8EB; --accent-text:#6E1B28;
   --rufous:#8E2434; --rufous-weak:#F7E8EB;
   --ok:#2E7D4F; --ok-weak:#E7F3EC; --warn:#B45309; --warn-weak:#FCEEDD; --err:#D0552F; --err-weak:#FAEBE5;
-  --chip-node:#F7E8EB; --chip-node-t:#6E1B28; --chip-llm:#E8EEF4; --chip-llm-t:#3D5876; --chip-tool:#E9EAFB; --chip-tool-t:#3A3FC4;
+  --chip-node:#F7E8EB; --chip-node-t:#6E1B28; --chip-llm:#E8EEF4; --chip-llm-t:#3D5876; --chip-tool:#E9EAFB; --chip-tool-t:#3A3FC4; --chip-ret:#E1F1EE; --chip-ret-t:#1F6B60;
   --rail:#14132B; --rail-text:#B9B9D6; --rail-text2:#75759E; --rail-line:#262544; --rail-on:#FFFFFF;
   --shadow:0 1px 2px rgba(28,27,51,.05),0 3px 12px rgba(28,27,51,.05);
   --shadow-lg:0 10px 40px rgba(28,27,51,.18);
@@ -41,7 +41,7 @@
   --accent:#D4626F; --accent-weak:#331318; --accent-text:#EC9CA6;
   --rufous:#D4626F; --rufous-weak:#331318;
   --ok:#4CC38A; --ok-weak:#12291D; --warn:#E5A13D; --warn-weak:#2E2210; --err:#F08A5E; --err-weak:#331B10;
-  --chip-node:#331318; --chip-node-t:#EC9CA6; --chip-llm:#16283A; --chip-llm-t:#7FB2E5; --chip-tool:#232349; --chip-tool-t:#A9ACF8;
+  --chip-node:#331318; --chip-node-t:#EC9CA6; --chip-llm:#16283A; --chip-llm-t:#7FB2E5; --chip-tool:#232349; --chip-tool-t:#A9ACF8; --chip-ret:#0F2A26; --chip-ret-t:#5FC9B8;
   --rail:#0A0A16; --rail-text:#A9A9C7; --rail-text2:#63638A; --rail-line:#202040; --rail-on:#FFFFFF;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
   --shadow-lg:0 12px 48px rgba(0,0,0,.55);
@@ -52,7 +52,7 @@
   --accent:#D4626F; --accent-weak:#331318; --accent-text:#EC9CA6;
   --rufous:#D4626F; --rufous-weak:#331318;
   --ok:#4CC38A; --ok-weak:#12291D; --warn:#E5A13D; --warn-weak:#2E2210; --err:#F08A5E; --err-weak:#331B10;
-  --chip-node:#331318; --chip-node-t:#EC9CA6; --chip-llm:#16283A; --chip-llm-t:#7FB2E5; --chip-tool:#232349; --chip-tool-t:#A9ACF8;
+  --chip-node:#331318; --chip-node-t:#EC9CA6; --chip-llm:#16283A; --chip-llm-t:#7FB2E5; --chip-tool:#232349; --chip-tool-t:#A9ACF8; --chip-ret:#0F2A26; --chip-ret-t:#5FC9B8;
   --rail:#0A0A16; --rail-text:#A9A9C7; --rail-text2:#63638A; --rail-line:#202040; --rail-on:#FFFFFF;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
   --shadow-lg:0 12px 48px rgba(0,0,0,.55);
@@ -166,6 +166,8 @@ td.r,th.r{text-align:right}
 .chip.node{background:var(--chip-node);color:var(--chip-node-t)}
 .chip.llm{background:var(--chip-llm);color:var(--chip-llm-t)}
 .chip.tool{background:var(--chip-tool);color:var(--chip-tool-t)}
+.chip.retriever{background:var(--chip-ret);color:var(--chip-ret-t)}
+.chip.interrupt{background:var(--warn-weak);color:var(--warn)}
 .tr-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tr-name.err{color:var(--err)}
 .tr-gantt{height:6px;background:var(--surface2);border-radius:3px;position:relative;overflow:hidden}
@@ -213,6 +215,7 @@ textarea:focus{border-color:var(--accent)}
 .rtools input[type=search]{width:250px}
 .rtools input:focus,.rtools select:focus,.scoreadd input:focus{border-color:var(--accent)}
 #rbook.on{color:var(--warn);border-color:var(--warn)}
+#xray.on{color:var(--accent-text);border-color:var(--accent)}
 .star{cursor:pointer;color:var(--muted);font-size:15px;line-height:1}
 .star.on{color:var(--warn)}
 .tagchip{display:inline-block;background:var(--accent-weak);color:var(--accent-text);font-size:10.5px;font-weight:600;
@@ -266,6 +269,8 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
 .tr-bar{background:var(--accent)}
 .tr-bar.llm{background:var(--chip-llm-t)}
 .tr-bar.tool{background:var(--chip-tool-t)}
+.tr-bar.retriever{background:var(--chip-ret-t)}
+.tr-bar.interrupt{background:var(--warn)}
 .charts .card:nth-child(2) .cbar{background:var(--chip-llm-t)}
 #cy{background:radial-gradient(circle,var(--border) 1px,transparent 1.5px) 0 0/24px 24px}
 .legend{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
@@ -311,7 +316,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="sessions">${ICON.layers} Sessions</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.5</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.7</span></div>
   </aside>
 
   <main>
@@ -329,6 +334,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
           <button class="btn ghost" onclick="cy&&cy.fit(undefined,50)">Fit</button>
           <button class="btn ghost" onclick="relayout()">Layout</button>
           <button class="btn ghost" id="orient" onclick="toggleOrient()">⇅ Vertical</button>
+          <button class="btn ghost" id="xray" style="display:none" onclick="toggleXray()">◉ X-ray</button>
         </div>
         <div class="legend">
           <span class="lg"><span class="sw"></span> idle</span>
@@ -344,6 +350,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
             <input type="search" id="rq" placeholder="Search payloads, prompts, errors…">
             <select id="rstatus"><option value="">All statuses</option>
               <option value="done">done</option><option value="error">error</option>
+              <option value="interrupted">interrupted</option>
               <option value="running">running</option></select>
             <button class="btn ghost" id="rbook" title="only bookmarked">★</button>
             <span id="rf-active"></span>
@@ -449,13 +456,17 @@ function cyStyle(){ return [
 function applyCyStyle(){ cy.style(cyStyle()); }
 
 /* ---------- graph ---------- */
+let XRAY=false;
+window.toggleXray=()=>{ XRAY=!XRAY; const b=$('#xray'); if(b)b.classList.toggle('on',XRAY); loadGraph(true); };
 async function loadGraph(force){
   const t=await(await fetch('/api/graph')).json();
   $('#gname').textContent=t.graph||'ingest-only';
+  const xb=$('#xray'); if(xb) xb.style.display=t.xray?'':'none';
   if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
+  const topo=(XRAY&&t.xray)?t.xray:t;
   const els=[];
-  t.nodes.forEach(n=>els.push({data:{id:n.id,label:n.label,terminal:n.terminal?1:undefined}}));
-  t.edges.forEach(e=>els.push({data:{id:e.id,source:e.source,target:e.target,conditional:e.conditional?1:undefined}}));
+  topo.nodes.forEach(n=>els.push({data:{id:n.id,label:n.label,terminal:n.terminal?1:undefined}}));
+  topo.edges.forEach(e=>els.push({data:{id:e.id,source:e.source,target:e.target,conditional:e.conditional?1:undefined}}));
   if(cy&&!force){return;}
   cy=cytoscape({container:$('#cy'),elements:els,style:cyStyle(),
     layout:layoutOpts(),minZoom:.2,maxZoom:3,wheelSensitivity:.12});
@@ -589,6 +600,8 @@ async function runNow(input){
       for(const p of ps){ const ev=(p.match(/event: (.*)/)||[])[1],dm=(p.match(/data: (.*)/s)||[])[1]; if(!ev)continue; const d=dm?JSON.parse(dm):{};
         if(ev==='node'){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id(d.node).addClass('running');
           cy.edges(`[source="${prev}"][target="${d.node}"]`).addClass('flow'); prev=d.node; }
+        else if(ev==='interrupt'){ toast('Run paused at an interrupt — awaiting resume'); }
+        else if(ev==='interrupted'){ cy.$id(prev).addClass('running'); toast('Run interrupted — see Runs for the payload'); }
         else if(ev==='done'){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id('__end__').addClass('done'); toast('Run complete — saved to Runs'); }
         else if(ev==='error'){ cy.$id(prev).addClass('err').removeClass('running'); toast('Run error: '+(d.message||'failed')); } } }
   }catch(e){ toast('Run failed: '+e.message); }
@@ -681,7 +694,14 @@ async function openRun(id){
   const total=Math.max(1,...r.spans.map(s=>(s.offset_ms||0)+(s.dur_ms||0)));
   const byParent={}; r.spans.forEach(s=>{(byParent[s.parent_id||'root']=byParent[s.parent_id||'root']||[]).push(s);});
   let html = r.error?`<div class="kv"><div class="k">run error</div><pre class="err">${esc(r.error)}</pre></div>`:'';
+  if(r.input!=null) html += kv('run input', r.input);
   html += renderSpans(byParent['root']||[],byParent,total,0);
+  const tops=r.spans.filter(s=>!s.parent_id&&s.type==='node'&&s.output&&typeof s.output==='object'&&!Array.isArray(s.output));
+  if(tops.length>1) html += `<div class="kv" style="margin-top:12px"><div class="k">state evolution — keys each node wrote</div></div>`+
+    tops.map(s=>`<div class="scorerow" title="${esc(JSON.stringify(s.output)).replace(/"/g,'&quot;').slice(0,400)}">
+      <span class="chip node">${esc(s.name)}</span>
+      ${Object.keys(s.output).map(k=>`<span class="tagchip" style="cursor:default">${esc(k)}</span>`).join('')}
+      <span style="color:var(--muted);font-size:11px;margin-left:auto" class="mono">${s.dur_ms!=null?fmtms(s.dur_ms):''}</span></div>`).join('');
   html += `<div class="kv" style="margin-top:14px"><div class="k">scores</div></div>
     ${(r.scores||[]).map(sc=>`<div class="scorerow"><span class="scorechip">${esc(sc.name)} ${sc.value}</span>
       ${sc.comment?`<span style="color:var(--muted);font-size:12px">${esc(sc.comment)}</span>`:''}

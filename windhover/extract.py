@@ -7,10 +7,10 @@ without importlib.reload fragility.
 import sys, json, importlib, inspect, functools
 
 
-def topology(graph) -> dict:
-    g = graph.get_graph()
+def topology(graph, xray: bool = False) -> dict:
+    g = graph.get_graph(xray=True) if xray else graph.get_graph()
     nodes = [{"id": nid, "label": str(getattr(n, "name", nid)).replace("__", ""),
-              "terminal": nid in ("__start__", "__end__")}
+              "terminal": nid.endswith(("__start__", "__end__"))}
              for nid, n in g.nodes.items()]
     edges = [{"id": f"e{i}", "source": e.source, "target": e.target,
               "conditional": bool(getattr(e, "conditional", False))}
@@ -93,5 +93,11 @@ def load(ref: str, dir_: str):
 if __name__ == "__main__":
     ref, dir_ = sys.argv[1], sys.argv[2]
     g = load(ref, dir_)
-    print(json.dumps({"topology": topology(g), "schema": input_schema(g),
-                      "sources": sources(g)}))
+    out = {"topology": topology(g), "schema": input_schema(g), "sources": sources(g)}
+    try:  # subgraph x-ray view, only when it actually differs
+        tx = topology(g, xray=True)
+        if tx != out["topology"]:
+            out["topology_xray"] = tx
+    except Exception:
+        pass
+    print(json.dumps(out))

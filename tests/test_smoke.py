@@ -3,7 +3,7 @@ LangGraph run (incl. a fake LLM node to exercise LLM-span capture). Run:
 
     python -m pytest tests/ -q      (or: python tests/test_smoke.py)
 """
-import os, sys, tempfile, time
+import json, os, sys, tempfile, time
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from windhover.store import Store
@@ -188,6 +188,62 @@ def test_error_traceback_capture():
     print("error traceback capture OK")
 
 
+def test_retriever_spans():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="rag")
+    tr.on_chain_start({}, {"q": "hi"}, run_id="root", parent_run_id=None)
+
+    class Doc:
+        def __init__(self, c): self.page_content, self.metadata = c, {"src": "kb.md"}
+    tr.on_retriever_start({"name": "VectorStoreRetriever"}, "pricing policy",
+                          run_id="ret1", parent_run_id="root")
+    tr.on_retriever_end([Doc("alpha"), Doc("beta")], run_id="ret1")
+    tr.on_chain_end({}, run_id="root")
+    d = s.run_detail(tr.run_id)
+    ret = [sp for sp in d["spans"] if sp["type"] == "retriever"]
+    assert ret and ret[0]["name"] == "VectorStoreRetriever"
+    assert ret[0]["input"] == "pricing policy"
+    assert ret[0]["output"]["count"] == 2
+    assert ret[0]["output"]["documents"][0]["content"] == "alpha"
+    print("retriever spans OK")
+
+
+def test_interrupt_status():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="hitl")
+    tr.on_chain_start({}, {"x": 1}, run_id="root", parent_run_id=None)
+    tr.on_chain_end({"__interrupt__": [{"value": "approve the wire transfer?"}]}, run_id="root")
+    d = s.run_detail(tr.run_id)
+    assert d["status"] == "interrupted", d["status"]
+    ints = [sp for sp in d["spans"] if sp["type"] == "interrupt"]
+    assert ints and "approve the wire transfer?" in json.dumps(ints[0]["output"])
+    print("interrupt status OK")
+
+
+def test_xray_topology():
+    from typing import TypedDict
+    from langgraph.graph import StateGraph, START, END
+    from windhover.extract import topology
+
+    class St(TypedDict):
+        x: int
+    child = StateGraph(St)
+    child.add_node("inner_a", lambda st: {"x": st["x"] + 1})
+    child.add_node("inner_b", lambda st: {"x": st["x"] * 2})
+    child.add_edge(START, "inner_a"); child.add_edge("inner_a", "inner_b")
+    child.add_edge("inner_b", END)
+    parent = StateGraph(St)
+    parent.add_node("child", child.compile())
+    parent.add_edge(START, "child"); parent.add_edge("child", END)
+    app = parent.compile()
+    plain, xray = topology(app), topology(app, xray=True)
+    assert len(xray["nodes"]) > len(plain["nodes"]), (len(plain["nodes"]), len(xray["nodes"]))
+    assert any("inner_a" in n["id"] for n in xray["nodes"])
+    print("xray topology OK —", len(plain["nodes"]), "->", len(xray["nodes"]), "nodes")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -197,4 +253,7 @@ if __name__ == "__main__":
     test_tracer_metadata_session_tags()
     test_source_extraction()
     test_error_traceback_capture()
+    test_retriever_spans()
+    test_interrupt_status()
+    test_xray_topology()
     print("ALL SMOKE TESTS PASSED")

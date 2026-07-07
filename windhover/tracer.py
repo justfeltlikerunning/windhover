@@ -192,7 +192,18 @@ class SpanBuilder(BaseCallbackHandler):
         if info:
             self._finish_span(info, output=_trunc(outputs))
         elif run_id == self._root:
-            self._emit({"kind": "run_close", "run_id": self.run_id, "status": "done",
+            # LangGraph human-in-the-loop: a paused graph surfaces __interrupt__
+            # in its final output — that's a pause awaiting Command(resume=...),
+            # not a completion.
+            interrupted = isinstance(outputs, dict) and "__interrupt__" in outputs
+            if interrupted:
+                self._finish_span(
+                    {"span_id": uuid.uuid4().hex[:12], "type": "interrupt",
+                     "name": "interrupt", "t": time.time(), "parent": None,
+                     "input": None},
+                    output=_trunc(outputs.get("__interrupt__")))
+            self._emit({"kind": "run_close", "run_id": self.run_id,
+                        "status": "interrupted" if interrupted else "done",
                         "ended_ms": int(time.time() * 1000)})
 
     def on_chain_error(self, error, *, run_id=None, **kw):
@@ -231,6 +242,30 @@ class SpanBuilder(BaseCallbackHandler):
         info = self._open.pop(run_id, None)
         if info:
             self._finish_span(info, status="error", error=_err_text(error), model=info["name"])
+
+    # -- retrievers (LangChain RAG) --
+    def on_retriever_start(self, serialized, query, *, run_id=None, parent_run_id=None, **kw):
+        sid = uuid.uuid4().hex[:12]
+        self._span_of[run_id] = sid
+        self._open[run_id] = {"span_id": sid, "type": "retriever",
+                              "name": (serialized or {}).get("name") or "retriever",
+                              "t": time.time(), "parent": parent_run_id,
+                              "input": _trunc(query)}
+
+    def on_retriever_end(self, documents, *, run_id=None, **kw):
+        info = self._open.pop(run_id, None)
+        if not info:
+            return
+        docs = list(documents or [])
+        preview = [{"content": str(getattr(d, "page_content", d))[:300],
+                    "metadata": _trunc(getattr(d, "metadata", None), 500)}
+                   for d in docs[:8]]
+        self._finish_span(info, output=_trunc({"count": len(docs), "documents": preview}))
+
+    def on_retriever_error(self, error, *, run_id=None, **kw):
+        info = self._open.pop(run_id, None)
+        if info:
+            self._finish_span(info, status="error", error=_err_text(error))
 
     # -- tools --
     def on_tool_start(self, serialized, input_str, *, run_id=None, parent_run_id=None, **kw):
