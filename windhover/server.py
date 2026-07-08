@@ -156,7 +156,10 @@ def api_graph():
 @app.get("/api/schema")
 def api_schema():
     s = TOPO.schema()
-    return JSONResponse({"schema": s, "template": _template(s)})
+    with TOPO.lock:
+        ctx = TOPO.data.get("context_schema") or {}
+    return JSONResponse({"schema": s, "template": _template(s),
+                         "context_schema": ctx, "context_template": _template(ctx)})
 
 
 def _sse(ev: str, data: dict) -> str:
@@ -229,12 +232,15 @@ async def api_run(request: Request):
     thread = payload.pop("_thread", None)
     pause_before = payload.pop("_interrupt_before", None)
     pause_after = payload.pop("_interrupt_after", None)
+    extra_conf = payload.pop("_configurable", None)
     tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref, session=session, tags=tags)
     config = {"callbacks": [tracer]}
     if thread or getattr(graph, "checkpointer", None) is not None:
         # a checkpointed graph needs a thread; default to the run id so
         # time-travel works out of the box
         config["configurable"] = {"thread_id": thread or tracer.run_id}
+    if isinstance(extra_conf, dict) and extra_conf:
+        config.setdefault("configurable", {}).update(extra_conf)
     sk = {}
     if pause_before:
         sk["interrupt_before"] = [str(n) for n in pause_before]

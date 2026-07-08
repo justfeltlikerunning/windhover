@@ -423,6 +423,69 @@ def test_static_breakpoint_and_state_edit():
     print("static breakpoint + state edit OK")
 
 
+def test_streaming_partials_params_tools():
+    """Token stream flushes partial spans (live 'model typing'); invocation
+    params + offered tools captured per LLM span."""
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="stream")
+    tr.on_chain_start({}, {"q": 1}, run_id="root", parent_run_id=None)
+    tr.on_chat_model_start(
+        {"kwargs": {"model": "fable-fast"}}, [[]], run_id="L", parent_run_id="root",
+        invocation_params={"model": "fable-fast", "temperature": 0.1, "stream": True,
+                           "tools": [{"function": {"name": "get_weather"}}]})
+    tr.on_llm_new_token("Hello ", run_id="L")
+    tr._open["L"]["flushed"] = 0            # force the throttle window open
+    tr.on_llm_new_token("wind", run_id="L")  # -> partial flush
+    mid = s.run_detail(tr.run_id)
+    llm_mid = [x for x in mid["spans"] if x["type"] == "llm"][0]
+    assert llm_mid["status"] == "running" and "Hello wind" in llm_mid["output"]
+
+    class Msg:
+        content = "Hello windhover"
+        usage_metadata = {"input_tokens": 10, "output_tokens": 3}
+    class Gen:
+        text = "Hello windhover"; message = Msg()
+    class Resp:
+        llm_output = None; generations = [[Gen()]]
+    tr.on_llm_end(Resp(), run_id="L")
+    tr.on_chain_end({}, run_id="root")
+    d = s.run_detail(tr.run_id)
+    llm = [x for x in d["spans"] if x["type"] == "llm"][0]
+    assert llm["status"] == "ok" and llm["output"] == "Hello windhover"
+    assert llm["params"]["temperature"] == 0.1
+    assert llm["params"]["tools_offered"] == ["get_weather"]
+    assert len([x for x in d["spans"] if x["type"] == "llm"]) == 1  # partial replaced
+    print("streaming partials + params/tools OK")
+
+
+def test_edge_labels_and_node_metadata():
+    from typing import TypedDict, Literal
+    from langgraph.graph import StateGraph, START, END
+    from windhover.extract import topology
+
+    class St(TypedDict):
+        x: int
+    def route(st) -> Literal["yes", "no"]:
+        return "yes"
+    g = StateGraph(St)
+    g.add_node("decide", lambda st: {"x": st["x"]},
+               metadata={"owner": "team-a", "doc": "routing"})
+    g.add_node("approve", lambda st: {"x": 1})
+    g.add_node("reject", lambda st: {"x": 0})
+    g.add_edge(START, "decide")
+    g.add_conditional_edges("decide", route, {"yes": "approve", "no": "reject"})
+    g.add_edge("approve", END); g.add_edge("reject", END)
+    topo = topology(g.compile())
+    decide = next(n for n in topo["nodes"] if n["id"] == "decide")
+    assert decide["metadata"] == {"owner": "team-a", "doc": "routing"}
+    labels = {(e["source"], e["target"]): e["label"] for e in topo["edges"]}
+    assert labels[("decide", "approve")] == "yes"
+    assert labels[("decide", "reject")] == "no"
+    assert labels[("__start__", "decide")] is None
+    print("edge labels + node metadata OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -442,4 +505,6 @@ if __name__ == "__main__":
     test_demo_memory_and_events_end_to_end()
     test_hitl_interrupt_resume()
     test_static_breakpoint_and_state_edit()
+    test_streaming_partials_params_tools()
+    test_edge_labels_and_node_metadata()
     print("ALL SMOKE TESTS PASSED")

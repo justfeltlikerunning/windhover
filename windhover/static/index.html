@@ -454,7 +454,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.10</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.11</span></div>
   </aside>
 
   <main>
@@ -554,6 +554,8 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <input id="run-session" placeholder="session (optional)" style="flex:1;min-width:130px">
       <input id="run-tags" placeholder="tags, comma-separated (optional)" style="flex:1;min-width:160px">
     </div>
+    <div id="ctx-wrap" style="display:none"><div class="hint" style="margin:8px 0 4px">Runtime context / configurable (from the graph's context schema):</div>
+    <textarea id="ctx-json" spellcheck="false" style="min-height:70px"></textarea></div>
     <div class="hint" style="margin:8px 0 4px">Pause before (static breakpoints — resume from the run drawer):</div>
     <div id="pause-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     <div class="actions">
@@ -613,6 +615,9 @@ function cyStyle(){ return [
  {selector:'node.err',style:{'border-color':cssv('--err'),'background-color':cssv('--err-weak')}},
  {selector:'edge',style:{'width':1.6,'line-color':cssv('--border2'),'target-arrow-color':cssv('--border2'),'target-arrow-shape':'triangle','curve-style':'bezier','arrow-scale':1}},
  {selector:'edge[?conditional]',style:{'line-style':'dashed'}},
+ {selector:'edge[label]',style:{'label':'data(label)','font-size':10,
+   'font-family':'ui-monospace, Menlo, Consolas, monospace','color':cssv('--text2'),
+   'text-background-color':cssv('--bg'),'text-background-opacity':.9,'text-background-padding':2}},
  {selector:'edge.flow',style:{'line-color':cssv('--accent'),'target-arrow-color':cssv('--accent'),'width':2.4}},
 ];}
 function applyCyStyle(){ cy.style(cyStyle()); }
@@ -626,9 +631,10 @@ async function loadGraph(force){
   const xb=$('#xray'); if(xb) xb.style.display=t.xray?'':'none';
   if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
   const topo=(XRAY&&t.xray)?t.xray:t;
+  window.__nodes=Object.fromEntries(topo.nodes.map(n=>[n.id,n]));
   const els=[];
   topo.nodes.forEach(n=>els.push({data:{id:n.id,label:n.label,terminal:n.terminal?1:undefined}}));
-  topo.edges.forEach(e=>els.push({data:{id:e.id,source:e.source,target:e.target,conditional:e.conditional?1:undefined}}));
+  topo.edges.forEach(e=>els.push({data:{id:e.id,source:e.source,target:e.target,conditional:e.conditional?1:undefined,label:e.label||undefined}}));
   if(cy&&!force){return;}
   cy=cytoscape({container:$('#cy'),elements:els,style:cyStyle(),
     layout:layoutOpts(),minZoom:.2,maxZoom:3,wheelSensitivity:.12});
@@ -704,6 +710,8 @@ async function openNode(name){
   const hiAll=new Set();
   if(src)(d.recent||[]).forEach(r=>{ if(r.error) tbLines(r.error,src).forEach(x=>hiAll.add(x)); });
   let html=`<div class="kv"><div class="k">wiring</div><pre>${esc((inn.join(', ')||'START')+'  →  '+name+'  →  '+(out.join(', ')||'END'))}</pre></div>`;
+  const nmeta=(window.__nodes||{})[name]?.metadata;
+  if(nmeta) html+=kv('node metadata', nmeta);
   if(src) html+=`<div class="kv"><div class="k">source · ${esc((src.file||'').split('/').pop())}:${src.line_start}${hiAll.size?` · <span style="color:var(--err)">error line${hiAll.size>1?'s':''} ${[...hiAll].join(', ')}</span>`:''}
       <button class="copy" onclick="navigator.clipboard.writeText(__nodeSrc.code);toast('Copied source')">copy</button></div>${codeBlock(src,hiAll)}</div>`;
   html+=`<div class="kv"><div class="k">executions — newest first, expand for payloads</div></div>`;
@@ -758,8 +766,12 @@ function switchView(v){ VIEW=v;
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
 
 /* ---------- new run ---------- */
-$('#newrun').onclick=async()=>{ let tpl={}; try{tpl=(await(await fetch('/api/schema')).json()).template||{};}catch(e){}
+$('#newrun').onclick=async()=>{ let tpl={},ctx={},cs={}; try{const sd=await(await fetch('/api/schema')).json(); tpl=sd.template||{}; ctx=sd.context_template||{}; cs=sd.context_schema||{};}catch(e){}
   $('#input-json').value=JSON.stringify(tpl,null,2);
+  const cw=document.getElementById('ctx-wrap');
+  if(cw){ const has=cs&&cs.properties&&Object.keys(cs.properties).length;
+    cw.style.display=has?'':'none';
+    if(has) document.getElementById('ctx-json').value=JSON.stringify(ctx,null,2); }
   const pc=document.getElementById('pause-chips');
   if(pc&&cy) pc.innerHTML=cy.nodes().filter(n=>!n.data('terminal')).map(n=>
     `<span class="tagchip pause-chip" data-n="${esc(n.id())}" onclick="this.classList.toggle('on')">${esc(n.id())}</span>`).join('');
@@ -770,6 +782,9 @@ $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json')
   if(sess)input._session=sess; if(tags.length)input._tags=tags;
   const paused=[...document.querySelectorAll('.pause-chip.on')].map(e=>e.dataset.n);
   if(paused.length) input._interrupt_before=paused;
+  const cw=document.getElementById('ctx-wrap');
+  if(cw&&cw.style.display!=='none'){ try{ const c=JSON.parse(document.getElementById('ctx-json').value||'{}');
+    if(Object.keys(c).length) input._configurable=c; }catch(e){ return toast('Invalid context JSON'); } }
   closeAll(); switchView('graph'); await runNow(input); };
 
 async function runNow(input){
@@ -956,7 +971,7 @@ function renderSpans(list,byParent,total,depth){
         <div class="tr-meta">${meta}</div>
       </div>
       <div class="tr-detail" id="${did}">
-        ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}${s.usage_detail?'  ·  '+esc(Object.entries(s.usage_detail).map(([k,v])=>`${v} ${k.replace('input_','').replace('output_','')}`).join(', ')):''}</pre></div>`:''}
+        ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}${s.usage_detail?'  ·  '+esc(Object.entries(s.usage_detail).map(([k,v])=>`${v} ${k.replace('input_','').replace('output_','')}`).join(', ')):''}${s.params?'\n'+esc(Object.entries(s.params).map(([k,v])=>k==='tools_offered'?'tools: '+v.join(', '):k+'='+v).join('  ·  ')):''}</pre></div>`:''}
         ${s.error?`<div class="kv"><div class="k">error${s.type==='node'?`<button class="copy" onclick="showSpanSource('${s.id}')">view source</button>`:''}</div><pre class="err">${esc(s.error)}</pre><div id="src-${s.id}"></div></div>`:''}
         ${s.input!=null?kv('input',s.input):''}
         ${s.output!=null?kv('output',s.output):''}

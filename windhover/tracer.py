@@ -153,9 +153,13 @@ class SpanBuilder(BaseCallbackHandler):
                      model=None, pt=None, ct=None, usage_detail=None):
         now = time.time()
         sid = info["span_id"]
+        seq = info.get("seq")
+        if seq is None:
+            seq = self._seq
+            self._seq += 1
         self._emit({"kind": "span", "id": sid, "run_id": self.run_id,
                     "parent_id": self._span_of.get(info.get("parent")),
-                    "seq": self._seq, "type": info["type"], "name": info["name"],
+                    "seq": seq, "type": info["type"], "name": info["name"],
                     "status": status, "started_ms": int(info["t"] * 1000),
                     "ended_ms": int(now * 1000), "offset_ms": self._rel(info["t"]),
                     "dur_ms": int((now - info["t"]) * 1000),
@@ -164,8 +168,7 @@ class SpanBuilder(BaseCallbackHandler):
                     "cost_usd": cost_of(model, pt, ct), "error": error,
                     "retries": info.get("retries"),
                     "ttft_ms": int(info["ttft"] * 1000) if info.get("ttft") is not None else None,
-                    "usage_detail": usage_detail})
-        self._seq += 1
+                    "usage_detail": usage_detail, "params": info.get("params")})
 
     # -- chains / nodes --
     _INTERNAL_TAG_PREFIXES = ("graph:", "langsmith:", "seq:", "langgraph_")
@@ -180,6 +183,8 @@ class SpanBuilder(BaseCallbackHandler):
             #   config={"metadata": {"windhover_session": ..., "windhover_tags": [...]},
             #           "tags": [...]}
             md = metadata or {}
+            if md.get("windhover_run_name"):
+                self.run_name = str(md["windhover_run_name"])
             if md.get("windhover_session"):
                 self.session = str(md["windhover_session"])
             user_tags = [t for t in (tags or [])
@@ -257,12 +262,31 @@ class SpanBuilder(BaseCallbackHandler):
                         "ended_ms": int(time.time() * 1000), "error": err})
 
     # -- LLMs --
+    @staticmethod
+    def _llm_params(kw) -> Optional[dict]:
+        inv = kw.get("invocation_params") or {}
+        out = {}
+        for k in ("temperature", "max_tokens", "max_completion_tokens", "stream", "top_p"):
+            if inv.get(k) is not None:
+                out[k] = inv[k]
+        tools = []
+        for tl in (inv.get("tools") or []):
+            fn = tl.get("function", tl) if isinstance(tl, dict) else {}
+            if isinstance(fn, dict) and fn.get("name"):
+                tools.append(fn["name"])
+        if tools:
+            out["tools_offered"] = tools
+        return out or None
+
     def _llm_start(self, serialized, prompt, run_id, parent_run_id, kw):
         sid = uuid.uuid4().hex[:12]
         self._span_of[run_id] = sid
+        seq = self._seq
+        self._seq += 1  # reserved now so streaming partials keep a stable order
         self._open[run_id] = {"span_id": sid, "type": "llm",
                               "name": _model_name(serialized, kw), "t": time.time(),
-                              "parent": parent_run_id, "input": _trunc(prompt)}
+                              "parent": parent_run_id, "input": _trunc(prompt),
+                              "seq": seq, "params": self._llm_params(kw)}
 
     def on_llm_start(self, serialized, prompts, *, run_id=None, parent_run_id=None, **kw):
         self._llm_start(serialized, prompts, run_id, parent_run_id, kw)
@@ -285,10 +309,30 @@ class SpanBuilder(BaseCallbackHandler):
             self._finish_span(info, status="error", error=_err_text(error), model=info["name"])
 
     def on_llm_new_token(self, token, *, run_id=None, **kw):
-        # streaming: first token stamps time-to-first-token
+        # streaming: first token stamps time-to-first-token; the growing text is
+        # flushed as a partial span every ~0.5s so a live-tailed drawer shows
+        # the model typing
         info = self._open.get(run_id)
-        if info is not None and "ttft" not in info:
-            info["ttft"] = time.time() - info["t"]
+        if info is None:
+            return
+        now = time.time()
+        if "ttft" not in info:
+            info["ttft"] = now - info["t"]
+        info["buf"] = (info.get("buf") or "") + (token or "")
+        if now - info.get("flushed", 0) >= 0.5 and info.get("buf"):
+            info["flushed"] = now
+            self._emit({"kind": "span", "id": info["span_id"], "run_id": self.run_id,
+                        "parent_id": self._span_of.get(info.get("parent")),
+                        "seq": info["seq"], "type": "llm", "name": info["name"],
+                        "status": "running", "started_ms": int(info["t"] * 1000),
+                        "ended_ms": None, "offset_ms": self._rel(info["t"]),
+                        "dur_ms": int((now - info["t"]) * 1000),
+                        "input": info.get("input"), "output": info["buf"][-4000:],
+                        "model": info["name"], "prompt_tokens": None,
+                        "completion_tokens": None, "cost_usd": None, "error": None,
+                        "retries": info.get("retries"),
+                        "ttft_ms": int(info["ttft"] * 1000),
+                        "usage_detail": None, "params": info.get("params")})
 
     # -- retries (tenacity, e.g. rate limits) --
     def on_retry(self, retry_state, *, run_id=None, **kw):

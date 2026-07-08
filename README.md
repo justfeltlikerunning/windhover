@@ -74,8 +74,12 @@ graph.invoke(input, config={
   status/tag/session filters, bookmarks, pagination, CSV/JSON export.
 - **Sessions** — group runs into threads/batches; roll-up tokens, cost, errors.
 - **Scores** — attach numeric evals to runs (API or UI): eval harnesses, LLM-as-judge, human review.
-- **Live tail** — open a running run and watch its spans arrive in real time; nodes can push
-  progress via LangGraph's `get_stream_writer()`.
+- **Live tail** — open a running run and watch spans arrive — including **the model typing**
+  (streamed tokens flush into the span twice a second); nodes push progress via
+  `get_stream_writer()`.
+- **Call configs** — every LLM span records temperature/max-tokens/stream **and the tools the
+  model was offered**; conditional-edge branch labels and `add_node(metadata=…)` render on the
+  graph and node pane; graphs with a context schema get a runtime-context box on New run.
 - **Custom events** — `dispatch_custom_event("name", {...})` anywhere in your app lands as an
   event marker in the trace, parented to the node that fired it.
 - **Retries + TTFT** — tenacity retries badge the span (`↻2`); streaming LLM calls record
