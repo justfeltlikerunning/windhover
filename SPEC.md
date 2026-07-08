@@ -1,4 +1,4 @@
-# Windhover — engineering spec (current as of v0.11)
+# Windhover — engineering spec (current as of v0.14)
 
 Self-hosted LangGraph/LangChain observability + human-in-the-loop console.
 Code is the only source of truth; Windhover observes and, for HITL, drives the
@@ -22,22 +22,36 @@ breakpoints, update_state, checkpoint forking). No visual editing, ever.
 ## Architecture
 - **FastAPI + SSE** (no websockets). Single-file UI (`static/index.html`) +
   vendored cytoscape/dagre/fonts.
+- **Multi-graph registry**: `WINDHOVER_GRAPH` comma list (`name=module:attr`)
+  or every graph in `langgraph.json`; per-graph `Topo` watchers; `graph=`
+  scopes graph/schema/source/memory/threads/stats/sessions/dataset-run;
+  `/api/run` takes `_graph`; run rows store the registry name.
 - **Topology**: subprocess (`windhover.extract`) re-imports the graph on file
   mtime change → nodes/edges (+labels/metadata), input & context schemas,
   per-node source (inspect, unwrapped), x-ray variant; sha1-hash change bumps a
   version pushed over `/api/events` SSE.
-- **Tracer** (`windhover.tracer.SpanBuilder`): chains→node spans (langgraph_node
-  metadata), LLM (params, tools offered, tokens+details, TTFT, streaming
-  partials every ~0.5 s), tools, retrievers, retries, custom events,
-  GraphInterrupt→interrupted, session/tags/run_name/thread_id via config
-  metadata. Best-effort: never raises into the user's graph.
+- **Tracer** (`windhover.tracer.SpanBuilder`): concurrency-safe per-root run
+  contexts (parallel invokes = separate runs; bare llm/tool/retriever calls
+  open implicit runs; bookkeeping purged per run — no growth in long-lived
+  apps). Captures chains→node spans, LLM (params, tools offered,
+  tokens+cache/reasoning details, TTFT, streaming partials ~0.5 s), tools,
+  retrievers, retries, custom events, GraphInterrupt→interrupted (a pause,
+  never an error), messages as {role, content, tool_calls},
+  session/tags/run_name/thread_id via config metadata. The HTTP sink is
+  non-blocking (bounded queue + drain thread, sheds oldest). Best-effort:
+  never raises into — or slows — the user's graph.
 - **Store** (`windhover.store`, SQLite WAL, schema v7): runs / spans (tree) /
   scores / datasets (+span_fts). Feature-detects FTS5 & json1 at startup;
   idempotent column migrations.
 - **HITL** (`/api/threads/*`): thin wrappers over `Command(resume|goto)`,
   `interrupt_before/after`, `update_state`, `get_state_history`, checkpoint-id
-  forking. Requires the local graph to have a checkpointer.
+  forking. Requires the local graph to have a checkpointer. Pending-node
+  detection queries by thread only (a checkpoint_id would read history).
+- **Cache visibility**: LangGraph `CachePolicy` hits fire no callbacks; local
+  runs synthesize the node span with `params.cached`.
 - **Auth**: optional `WINDHOVER_TOKEN` Bearer/?token= gate on `/api` only.
+- **Alerts**: `WINDHOVER_WEBHOOK` POSTs a summary on error/interrupted runs
+  (store.on_run_closed hook, fire-and-forget, deduped).
 
 ## Data model (schema v7)
 `runs`: id · graph · source(ui|ingest) · status(running|done|error|interrupted) ·

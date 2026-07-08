@@ -98,6 +98,11 @@ graph.invoke(input, config={
 - **Run history + replay** — SQLite; runs persist even if the browser closes (worker thread).
 - **Living graph** — file watcher re-extracts topology in a subprocess and pushes it to the UI.
 - **Dashboards** — runs/tokens per day, per-model usage and latency, per-node latency, error rate.
+- **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
+  scopes all views (runs, sessions, stats included — metrics never mix graphs).
+- **Alerts** — `WINDHOVER_WEBHOOK` pushes a JSON summary when a run errors or pauses.
+- **Never slows your app** — the remote tracer is non-blocking (bounded queue; drops
+  rather than delays when the collector is down).
 - **Mobile-first PWA**, light/dark. Fully local (FastAPI + Cytoscape.js).
 
 ## Datasets API
