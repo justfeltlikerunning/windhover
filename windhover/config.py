@@ -24,6 +24,13 @@ class Config:
     retention_days: int     # 0 = keep runs forever
     token: str              # WINDHOVER_TOKEN: require Bearer/query token on /api ("" = open)
     webhook: str            # WINDHOVER_WEBHOOK: POST run summaries on error/interrupted ("" = off)
+    vapid_public: str       # WINDHOVER_VAPID_PUBLIC: base64url app-server key ("" = web push off)
+    vapid_private: str      # WINDHOVER_VAPID_PRIVATE: base64url private key
+    vapid_subject: str      # WINDHOVER_VAPID_SUBJECT: contact (mailto:/https URL) sent to the push service
+
+    @property
+    def push_enabled(self) -> bool:
+        return bool(self.vapid_public and self.vapid_private)
 
     @property
     def graph_ref(self) -> str:
@@ -86,4 +93,7 @@ class Config:
             retention_days=int(os.environ.get("WINDHOVER_RETENTION_DAYS", "0") or 0),
             token=os.environ.get("WINDHOVER_TOKEN", ""),
             webhook=os.environ.get("WINDHOVER_WEBHOOK", ""),
+            vapid_public=os.environ.get("WINDHOVER_VAPID_PUBLIC", ""),
+            vapid_private=os.environ.get("WINDHOVER_VAPID_PRIVATE", ""),
+            vapid_subject=os.environ.get("WINDHOVER_VAPID_SUBJECT", "mailto:windhover@localhost"),
         )

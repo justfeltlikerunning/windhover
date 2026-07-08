@@ -13,7 +13,7 @@ from __future__ import annotations
 import json, os, sqlite3, threading, time, uuid
 from typing import Any, Optional
 
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 _lock = threading.Lock()
 
 
@@ -59,6 +59,9 @@ class Store:
               comment TEXT, source TEXT, created_ms INTEGER);
             CREATE TABLE IF NOT EXISTS datasets(
               id TEXT PRIMARY KEY, name TEXT UNIQUE, items TEXT, created_ms INTEGER);
+            CREATE TABLE IF NOT EXISTS push_subscriptions(
+              endpoint TEXT PRIMARY KEY, p256dh TEXT, auth TEXT,
+              label TEXT, created_ms INTEGER);
             CREATE INDEX IF NOT EXISTS ix_spans_run ON spans(run_id, seq);
             CREATE INDEX IF NOT EXISTS ix_runs_started ON runs(started_ms DESC);
             CREATE INDEX IF NOT EXISTS ix_runs_session ON runs(session);
@@ -213,6 +216,26 @@ class Store:
     def delete_score(self, score_id: str) -> bool:
         with _lock, self._conn() as c:
             return c.execute("DELETE FROM scores WHERE id=?", (score_id,)).rowcount > 0
+
+    # ---- web-push subscriptions --------------------------------------------
+    def add_push_subscription(self, sub: dict, label: str = "") -> None:
+        """Upsert a browser PushSubscription (keyed by its endpoint)."""
+        keys = sub.get("keys") or {}
+        with _lock, self._conn() as c:
+            c.execute("""INSERT OR REPLACE INTO push_subscriptions
+                         (endpoint,p256dh,auth,label,created_ms) VALUES(?,?,?,?,?)""",
+                      (sub["endpoint"], keys.get("p256dh"), keys.get("auth"),
+                       label, int(time.time() * 1000)))
+
+    def push_subscriptions(self) -> list[dict]:
+        with _lock, self._conn() as c:
+            rows = c.execute("SELECT endpoint,p256dh,auth FROM push_subscriptions").fetchall()
+        return [{"endpoint": r["endpoint"],
+                 "keys": {"p256dh": r["p256dh"], "auth": r["auth"]}} for r in rows]
+
+    def remove_push_subscription(self, endpoint: str) -> None:
+        with _lock, self._conn() as c:
+            c.execute("DELETE FROM push_subscriptions WHERE endpoint=?", (endpoint,))
 
     # ---- datasets -----------------------------------------------------------
     def add_dataset(self, name: str, items: list) -> dict:

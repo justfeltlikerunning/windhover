@@ -87,6 +87,8 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .spacer{flex:1}
 .icon-btn{width:34px;height:34px;display:grid;place-items:center;border:1px solid var(--border);border-radius:8px;color:var(--text2);background:var(--surface)}
 .icon-btn:hover{background:var(--surface2)}
+#alerts-btn.on{background:var(--accent);border-color:var(--accent)}   /* filled = subscribed */
+#alerts-btn.denied{background:var(--err-weak);border-color:var(--err)} /* blocked in iOS settings */
 .btn{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:8px;font-weight:600;font-size:13.5px;white-space:nowrap}
 .btn.primary{background:var(--accent);color:#fff;box-shadow:var(--shadow)}
 .btn.primary:hover{filter:brightness(1.07)}
@@ -436,8 +438,14 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
 .bottom-nav{display:none}
 @media (max-width:840px){
   aside{display:none}
-  .topbar{padding:calc(env(safe-area-inset-top)) 14px 0;height:calc(52px + env(safe-area-inset-top))}
-  .crumb{font-size:15px}
+  .topbar{gap:8px;
+    padding:calc(env(safe-area-inset-top) + 8px) calc(env(safe-area-inset-right) + 12px) 8px calc(env(safe-area-inset-left) + 12px);
+    height:calc(56px + env(safe-area-inset-top))}
+  .crumb{display:none}                       /* redundant with bottom-nav "GRAPH" — reclaim the width */
+  .topbar .pill{min-width:0;flex:0 1 auto;overflow:hidden}
+  .topbar #gname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:38vw}
+  #newrun .nr-t{display:none}                 /* icon-only on mobile so the row fits */
+  #newrun{padding:9px 11px}
   .page{padding:14px 12px calc(env(safe-area-inset-bottom) + 80px)}
   .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--border);
     padding:6px 8px calc(env(safe-area-inset-bottom) + 6px);z-index:20;justify-content:space-around}
@@ -478,8 +486,9 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <span class="crumb" id="crumb">Graph</span>
       <span class="pill" id="gpill"><span class="live-dot"></span><span class="plabel">graph</span><span id="gname">—</span><select id="gsel" style="display:none"></select></span>
       <div class="spacer"></div>
+      <button class="icon-btn" id="alerts-btn" title="Enable alerts on this device" style="display:none">🔔</button>
       <button class="icon-btn" id="theme" title="theme">${ICON.moon}</button>
-      <button class="btn primary" id="newrun">${ICON.play} New run</button>
+      <button class="btn primary" id="newrun">${ICON.play}<span class="nr-t">New run</span></button>
     </div>
     <div class="content">
       <div id="view-graph">
@@ -1303,6 +1312,52 @@ loadGraphList().then(()=>{ loadGraph(); probeMemory(); }); liveTopology();
 (function(){ const h=location.hash.slice(1);
   if(h==='runs'||h==='sessions'||h==='stats') switchView(h);
   else if(h.startsWith('run=')){ switchView('runs'); openRun(h.slice(4)); }
+})();
+</script>
+<script>
+/* Web Push opt-in. Button reveals only when the server has VAPID configured. */
+(function(){
+  function b64ToU8(s){
+    const pad='='.repeat((4-s.length%4)%4);
+    const b=atob((s+pad).replace(/-/g,'+').replace(/_/g,'/'));
+    return Uint8Array.from([...b].map(c=>c.charCodeAt(0)));
+  }
+  let PUB=null, ready=false;
+  function setBtn(state){
+    const b=document.getElementById('alerts-btn'); if(!b) return;
+    b.style.display=''; b.classList.remove('on','denied');
+    if(state==='on'){ b.textContent='🔔'; b.title='Alerts ON — tap to send a test'; b.classList.add('on'); }
+    else if(state==='denied'){ b.textContent='🔕'; b.title='Blocked in iOS Settings › Notifications'; b.classList.add('denied'); }
+    else { b.textContent='🔔'; b.title='Tap to enable alerts on this device'; }
+  }
+  function say(m){ if(window.toast) try{ toast(m); }catch(_){} }
+  async function init(){
+    let cfg; try{ cfg=await (await fetch('/api/push/config')).json(); }catch(_){ return; }
+    if(!cfg.enabled || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+    PUB=cfg.publicKey; ready=true;
+    const reg=await navigator.serviceWorker.register('/sw.js');
+    const sub=await reg.pushManager.getSubscription();
+    if(sub && Notification.permission==='granted') setBtn('on');
+    else if(Notification.permission==='denied') setBtn('denied');
+    else setBtn('off');
+  }
+  async function enable(){
+    if(!ready) return;
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){ setBtn(perm==='denied'?'denied':'off');
+      if(perm==='denied') say('Notifications blocked — enable in iOS Settings › Notifications'); return; }
+    const reg=await navigator.serviceWorker.ready;
+    let sub=await reg.pushManager.getSubscription();
+    if(!sub) sub=await reg.pushManager.subscribe({userVisibleOnly:true, applicationServerKey:b64ToU8(PUB)});
+    await fetch('/api/push/subscribe',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subscription:sub.toJSON(), label:navigator.platform||''})});
+    setBtn('on');
+    say('Alerts ON for this device — test sent');
+    fetch('/api/push/test',{method:'POST'}); // confirm delivery
+  }
+  document.addEventListener('click',e=>{ if(e.target.closest&&e.target.closest('#alerts-btn')) enable(); });
+  // the topbar renders via JS; poll briefly until the button exists, then init.
+  let tries=0; const t=setInterval(()=>{ if(document.getElementById('alerts-btn')||tries++>50){ clearInterval(t); init(); } },100);
 })();
 </script>
 </body>

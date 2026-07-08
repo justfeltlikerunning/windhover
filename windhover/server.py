@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import Config
 from .store import Store
 from .tracer import SpanBuilder, db_sink, apply_to_store, _trunc
+from . import push
 
 cfg = Config.from_env()
 store = Store(cfg.db_path)
@@ -186,8 +187,30 @@ def _fire_webhook(summary: dict) -> None:
     threading.Thread(target=_post, daemon=True).start()
 
 
-if cfg.webhook:
-    store.on_run_closed = _fire_webhook
+def _push_alert(summary: dict) -> None:
+    """Send a Web Push notification when a run needs attention. Fire-and-forget."""
+    if summary.get("status") not in ("error", "interrupted"):
+        return
+    run = store.run_detail(summary["id"]) or summary
+    graph = run.get("graph") or _default_name()
+    err = (str(summary.get("error") or "").strip().splitlines() or [""])[-1]
+    push.send_to_all(store, cfg, {
+        "title": f"Windhover — run {summary['status']}",
+        "body": f"{graph} · {summary['id']}" + (f"\n{err}" if err else ""),
+        "tag": summary["id"], "url": f"/?run={summary['id']}",
+        "status": summary["status"],
+    })
+
+
+def _on_run_closed(summary: dict) -> None:
+    if cfg.webhook:
+        _fire_webhook(summary)
+    if cfg.push_enabled:
+        _push_alert(summary)
+
+
+if cfg.webhook or cfg.push_enabled:
+    store.on_run_closed = _on_run_closed
 
 
 def _template(schema: dict) -> dict:
@@ -671,6 +694,51 @@ async def api_events(request: Request):
                 yield ": ping\n\n"
             await asyncio.sleep(2)
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/push/config")
+def push_config():
+    """Client bootstrap: is push on, and the VAPID app-server key to subscribe with."""
+    return JSONResponse({"enabled": cfg.push_enabled and push.available(),
+                         "publicKey": cfg.vapid_public})
+
+
+@app.post("/api/push/subscribe")
+async def push_subscribe(request: Request):
+    body = await request.json()
+    sub = body.get("subscription") or body
+    if not isinstance(sub, dict) or not sub.get("endpoint"):
+        return JSONResponse({"error": "missing subscription.endpoint"}, 400)
+    store.add_push_subscription(sub, label=str(body.get("label", "")))
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/push/unsubscribe")
+async def push_unsubscribe(request: Request):
+    body = await request.json()
+    endpoint = (body.get("endpoint") or (body.get("subscription") or {}).get("endpoint"))
+    if endpoint:
+        store.remove_push_subscription(endpoint)
+    return JSONResponse({"ok": True})
+
+
+@app.post("/api/push/test")
+def push_test():
+    if not (cfg.push_enabled and push.available()):
+        return JSONResponse({"error": "web push not configured"}, 400)
+    n = len(store.push_subscriptions())
+    push.send_to_all(store, cfg, {
+        "title": "Windhover", "body": "Test alert — notifications are working.",
+        "tag": "windhover-test", "url": "/",
+    })
+    return JSONResponse({"ok": True, "subscriptions": n})
+
+
+@app.get("/sw.js")
+def service_worker():
+    # served from root so its scope covers the whole app
+    return FileResponse(STATIC / "sw.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
 
 
 @app.get("/manifest.json")

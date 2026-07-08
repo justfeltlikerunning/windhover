@@ -100,7 +100,9 @@ graph.invoke(input, config={
 - **Dashboards** — runs/tokens per day, per-model usage and latency, per-node latency, error rate.
 - **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
   scopes all views (runs, sessions, stats included — metrics never mix graphs).
-- **Alerts** — `WINDHOVER_WEBHOOK` pushes a JSON summary when a run errors or pauses.
+- **Alerts** — `WINDHOVER_WEBHOOK` posts a JSON summary when a run errors or pauses; set
+  VAPID keys and installed browsers can also subscribe to **Web Push** notifications (a 🔔 in
+  the top bar; works as an installed PWA, iOS 16.4+ included).
 - **Never slows your app** — the remote tracer is non-blocking (bounded queue; drops
   rather than delays when the collector is down).
 - **Mobile-first PWA**, light/dark. Fully local (FastAPI + Cytoscape.js).
@@ -127,8 +129,16 @@ discovery, else ingest-only) · `WINDHOVER_GRAPH_DIR` · `WINDHOVER_DB`
 · `WINDHOVER_RETENTION_DAYS` (0 = keep forever; else prune older runs on startup + every 6h)
 · `WINDHOVER_TOKEN` (set to require `Authorization: Bearer <token>` — or `?token=` — on all
 `/api` routes; the UI prompts once and remembers it)
-· `WINDHOVER_WEBHOOK` (POST a JSON alert whenever a run errors or pauses on an interrupt).
+· `WINDHOVER_WEBHOOK` (POST a JSON alert whenever a run errors or pauses on an interrupt)
+· `WINDHOVER_VAPID_PUBLIC`/`WINDHOVER_VAPID_PRIVATE` (base64url VAPID keypair — set both to
+enable browser Web Push; unset = feature hidden) · `WINDHOVER_VAPID_SUBJECT` (a `mailto:` or
+`https:` contact URL sent to the push service; use a real domain — some services reject `.local`).
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
+
+**Web Push setup:** install the push extra (`pip install windhover[push]`), generate a VAPID
+keypair (e.g. `py-vapid`), set the three env vars above (over **HTTPS** — browsers only allow
+push from a secure origin), install the app to your home screen, and tap the 🔔. Alerts fire on
+the same errors/interrupts as the webhook.
 
 ## Docs
 **[The guide](docs/GUIDE.md)** covers every feature with how-tos and the fine print —
