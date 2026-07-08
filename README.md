@@ -121,11 +121,13 @@ curl -X POST :8090/api/runs/RUN_ID/scores -H 'Content-Type: application/json' \
 ```
 
 ## Config (env)
-`WINDHOVER_GRAPH` (module:attr; unset = ingest-only) · `WINDHOVER_GRAPH_DIR` · `WINDHOVER_DB`
+`WINDHOVER_GRAPH` (`module:attr`, or a comma list `name=module:attr,…`; unset = langgraph.json
+discovery, else ingest-only) · `WINDHOVER_GRAPH_DIR` · `WINDHOVER_DB`
 · `WINDHOVER_HOST`/`WINDHOVER_PORT` (0.0.0.0/8090) · `WINDHOVER_WATCH` (1) · `WINDHOVER_PRICING`
 · `WINDHOVER_RETENTION_DAYS` (0 = keep forever; else prune older runs on startup + every 6h)
 · `WINDHOVER_TOKEN` (set to require `Authorization: Bearer <token>` — or `?token=` — on all
-`/api` routes; the UI prompts once and remembers it).
+`/api` routes; the UI prompts once and remembers it)
+· `WINDHOVER_WEBHOOK` (POST a JSON alert whenever a run errors or pauses on an interrupt).
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
 
 ## Docs
