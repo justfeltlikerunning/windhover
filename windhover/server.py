@@ -8,6 +8,7 @@ changes and pushes it to the UI (the "living graph"). Runs use the imported grap
 """
 from __future__ import annotations
 import sys, json, time, hashlib, threading, queue, subprocess, importlib, traceback
+import uuid as uuid_mod
 from pathlib import Path
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
@@ -171,6 +172,7 @@ def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
     dynamic interrupts (__interrupt__ updates) and static breakpoints (stream
     ends with pending next-nodes) and corrects the run status accordingly."""
     run_id = tracer.run_id
+    seq_extra = [0]
     q: "queue.Queue" = queue.Queue()
 
     def worker():
@@ -183,12 +185,29 @@ def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
                     # get_stream_writer() output from inside a node -> live progress
                     q.put(("progress", {"data": _trunc(chunk, 600)}))
                     continue
+                cached = bool((chunk.get("__metadata__") or {}).get("cached")) \
+                    if isinstance(chunk, dict) else False
                 for node in chunk:
+                    if node == "__metadata__":
+                        continue
                     if node == "__interrupt__":
                         interrupted = True
                         q.put(("interrupt", {"run_id": run_id}))
-                    else:
-                        q.put(("node", {"node": node}))
+                        continue
+                    if cached:
+                        # cache hits fire NO callbacks — synthesize the span so
+                        # the trace shows the node ran (from cache)
+                        now = int(time.time() * 1000)
+                        store.add_span({"id": uuid_mod.uuid4().hex[:12],
+                                        "run_id": run_id, "parent_id": None,
+                                        "seq": 10_000 + seq_extra[0], "type": "node",
+                                        "name": node, "status": "ok",
+                                        "started_ms": now, "ended_ms": now,
+                                        "offset_ms": None, "dur_ms": 0,
+                                        "output": _trunc(chunk.get(node), 2000),
+                                        "params": {"cached": True}})
+                        seq_extra[0] += 1
+                    q.put(("node", {"node": node, "cached": cached or None}))
             if not interrupted and getattr(graph, "checkpointer", None) is not None:
                 try:  # static breakpoint: stream ended but nodes are pending
                     st = graph.get_state(config)

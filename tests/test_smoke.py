@@ -486,6 +486,93 @@ def test_edge_labels_and_node_metadata():
     print("edge labels + node metadata OK")
 
 
+def test_multi_root_and_bare_llm():
+    """One tracer, many executions: batch/concurrent invokes each get their own
+    run; a bare llm call with no chain opens an implicit run."""
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="multi")
+    for i in (1, 2):
+        tr.on_chain_start({}, {"a": i}, run_id=f"r{i}", parent_run_id=None)
+        tr.on_chain_start({}, {}, run_id=f"n{i}", parent_run_id=f"r{i}",
+                          metadata={"langgraph_node": "work"})
+        tr.on_chain_end({"ok": i}, run_id=f"n{i}")
+        tr.on_chain_end({"ok": i}, run_id=f"r{i}")
+    runs = s.runs()["runs"]
+    assert len(runs) == 2 and all(r["status"] == "done" and r["node_count"] == 1
+                                  for r in runs)
+    assert len({r["id"] for r in runs}) == 2
+
+    tr2 = SpanBuilder(db_sink(s), run_name="bare")
+    tr2.on_chat_model_start({"kwargs": {"model": "gpt-4o"}}, [[]],
+                            run_id="L", parent_run_id=None)
+    class M:
+        content = "hi"; usage_metadata = {"input_tokens": 5, "output_tokens": 2}
+    class G:
+        text = "hi"; message = M()
+    class R:
+        llm_output = None; generations = [[G()]]
+    tr2.on_llm_end(R(), run_id="L")
+    bare = [r for r in s.runs()["runs"] if r["graph"] == "bare"]
+    assert bare and bare[0]["status"] == "done" and bare[0]["llm_calls"] == 1
+    print("multi-root + bare-llm OK")
+
+
+def test_functional_api_tracing():
+    """@entrypoint/@task graphs trace like node graphs."""
+    from langgraph.func import entrypoint, task
+    from langgraph.checkpoint.memory import MemorySaver
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+
+    @task
+    def double(x: int) -> int:
+        return x * 2
+
+    @entrypoint(checkpointer=MemorySaver())
+    def flow(x: int) -> int:
+        return double(x).result() + 1
+
+    tr = SpanBuilder(db_sink(s), run_name="func")
+    out = flow.invoke(3, config={"callbacks": [tr],
+                                 "configurable": {"thread_id": "fx"}})
+    assert out == 7
+    time.sleep(.1)
+    d = s.run_detail(tr.run_id)
+    assert d["status"] == "done"
+    names = {sp["name"] for sp in d["spans"] if sp["type"] == "node"}
+    assert "double" in names, names
+    print("functional API tracing OK —", sorted(names))
+
+
+def test_message_serialization():
+    from windhover.tracer import _trunc
+    class FakeMsg:
+        type = "human"; content = "hello there"; tool_calls = None
+    v = _trunc({"messages": [FakeMsg()]})
+    assert v == {"messages": [{"role": "human", "content": "hello there"}]}, v
+    print("message serialization OK")
+
+
+def test_langgraph_json_discovery():
+    import json as _json, importlib
+    d = tempfile.mkdtemp()
+    gdir = os.path.join(d, "src"); os.makedirs(gdir)
+    open(os.path.join(gdir, "app.py"), "w").write("graph = None\n")
+    open(os.path.join(d, "langgraph.json"), "w").write(
+        _json.dumps({"graphs": {"main": "./src/app.py:graph"}}))
+    os.environ.pop("WINDHOVER_GRAPH", None)
+    os.environ["WINDHOVER_GRAPH_DIR"] = d
+    try:
+        from windhover.config import Config
+        cfg = Config.from_env()
+        assert cfg.graph_ref == "app:graph", cfg.graph_ref
+        assert cfg.graph_dir == gdir, cfg.graph_dir
+    finally:
+        os.environ.pop("WINDHOVER_GRAPH_DIR", None)
+    print("langgraph.json discovery OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -507,4 +594,8 @@ if __name__ == "__main__":
     test_static_breakpoint_and_state_edit()
     test_streaming_partials_params_tools()
     test_edge_labels_and_node_metadata()
+    test_multi_root_and_bare_llm()
+    test_functional_api_tracing()
+    test_message_serialization()
+    test_langgraph_json_discovery()
     print("ALL SMOKE TESTS PASSED")
