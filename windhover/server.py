@@ -163,31 +163,19 @@ def _sse(ev: str, data: dict) -> str:
     return f"event: {ev}\ndata: {json.dumps(data)}\n\n"
 
 
-@app.post("/api/run")
-async def api_run(request: Request):
-    if graph is None:
-        return JSONResponse({"error": "no local graph (WINDHOVER_GRAPH unset)"}, 400)
-    try:
-        payload = await request.json()
-    except Exception:
-        payload = {}
-    session = payload.pop("_session", None)
-    tags = payload.pop("_tags", None)
-    thread = payload.pop("_thread", None)
-    tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref, session=session, tags=tags)
+def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
+    """Shared SSE executor for /api/run and /api/threads/…/resume. Detects both
+    dynamic interrupts (__interrupt__ updates) and static breakpoints (stream
+    ends with pending next-nodes) and corrects the run status accordingly."""
     run_id = tracer.run_id
-    config = {"callbacks": [tracer]}
-    if thread or getattr(graph, "checkpointer", None) is not None:
-        # a checkpointed graph needs a thread; default to the run id so
-        # time-travel works out of the box
-        config["configurable"] = {"thread_id": thread or run_id}
     q: "queue.Queue" = queue.Queue()
 
     def worker():
         try:
             interrupted = False
-            for mode, chunk in graph.stream(payload, config=config,
-                                            stream_mode=["updates", "custom"]):
+            for mode, chunk in graph.stream(graph_input, config=config,
+                                            stream_mode=["updates", "custom"],
+                                            **(stream_kwargs or {})):
                 if mode == "custom":
                     # get_stream_writer() output from inside a node -> live progress
                     q.put(("progress", {"data": _trunc(chunk, 600)}))
@@ -198,6 +186,18 @@ async def api_run(request: Request):
                         q.put(("interrupt", {"run_id": run_id}))
                     else:
                         q.put(("node", {"node": node}))
+            if not interrupted and getattr(graph, "checkpointer", None) is not None:
+                try:  # static breakpoint: stream ended but nodes are pending
+                    st = graph.get_state(config)
+                    if st.next:
+                        interrupted = True
+                        q.put(("interrupt", {"run_id": run_id,
+                                             "next": list(st.next)}))
+                except Exception:
+                    pass
+            if interrupted:
+                # tracer closed the run as done on root end; correct it
+                store.close_run(run_id, "interrupted", int(time.time() * 1000))
             q.put(("interrupted" if interrupted else "done", {"run_id": run_id}))
         except Exception as e:
             # tracer already recorded the error span/close; surface to the client too
@@ -214,6 +214,86 @@ async def api_run(request: Request):
                 break
             yield _sse(ev, data)
     return StreamingResponse(stream(), media_type="text/event-stream")
+
+
+@app.post("/api/run")
+async def api_run(request: Request):
+    if graph is None:
+        return JSONResponse({"error": "no local graph (WINDHOVER_GRAPH unset)"}, 400)
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {}
+    session = payload.pop("_session", None)
+    tags = payload.pop("_tags", None)
+    thread = payload.pop("_thread", None)
+    pause_before = payload.pop("_interrupt_before", None)
+    pause_after = payload.pop("_interrupt_after", None)
+    tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref, session=session, tags=tags)
+    config = {"callbacks": [tracer]}
+    if thread or getattr(graph, "checkpointer", None) is not None:
+        # a checkpointed graph needs a thread; default to the run id so
+        # time-travel works out of the box
+        config["configurable"] = {"thread_id": thread or tracer.run_id}
+    sk = {}
+    if pause_before:
+        sk["interrupt_before"] = [str(n) for n in pause_before]
+    if pause_after:
+        sk["interrupt_after"] = [str(n) for n in pause_after]
+    return _stream_execution(payload, config, tracer, sk)
+
+
+@app.post("/api/threads/{thread_id}/resume")
+async def api_thread_resume(request: Request, thread_id: str):
+    """Human-in-the-loop: answer an interrupt (Command(resume=…)), redirect
+    (Command(goto=…)), continue past a static breakpoint (no body), or fork
+    from an earlier checkpoint (checkpoint_id)."""
+    if graph is None or getattr(graph, "checkpointer", None) is None:
+        return JSONResponse({"error": "no local graph with a checkpointer"}, 400)
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    try:
+        from langgraph.types import Command
+    except Exception:
+        return JSONResponse({"error": "langgraph.types.Command unavailable"}, 500)
+    if "value" in body:
+        graph_input = Command(resume=body["value"])
+    elif body.get("goto"):
+        graph_input = Command(goto=str(body["goto"]), update=body.get("update"))
+    else:
+        graph_input = None  # plain continue (static breakpoint / after state edit)
+    tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref,
+                         session=body.get("_session"),
+                         tags=(body.get("_tags") or []) + ["resume"])
+    configurable = {"thread_id": thread_id}
+    if body.get("checkpoint_id"):
+        configurable["checkpoint_id"] = str(body["checkpoint_id"])
+    config = {"callbacks": [tracer], "configurable": configurable}
+    return _stream_execution(graph_input, config, tracer)
+
+
+@app.post("/api/threads/{thread_id}/state")
+async def api_thread_update_state(request: Request, thread_id: str):
+    """Human-in-the-loop: edit state at the current (or a given) checkpoint —
+    LangGraph's update_state. Follow with …/resume to continue on the edit."""
+    if graph is None or getattr(graph, "checkpointer", None) is None:
+        return JSONResponse({"error": "no local graph with a checkpointer"}, 400)
+    body = await request.json()
+    values = body.get("values")
+    if not isinstance(values, dict):
+        return JSONResponse({"error": "requires values (object of state keys)"}, 400)
+    configurable = {"thread_id": thread_id}
+    if body.get("checkpoint_id"):
+        configurable["checkpoint_id"] = str(body["checkpoint_id"])
+    try:
+        new_cfg = graph.update_state({"configurable": configurable}, values,
+                                     as_node=body.get("as_node"))
+        return JSONResponse({"ok": True, "checkpoint_id":
+                             (new_cfg.get("configurable") or {}).get("checkpoint_id")})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 400)
 
 
 @app.post("/api/ingest")

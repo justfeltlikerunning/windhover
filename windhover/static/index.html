@@ -130,6 +130,58 @@ td.r,th.r{text-align:right}
 .empty{padding:56px 20px;text-align:center;color:var(--muted)}
 .empty .t{font-weight:600;color:var(--text2);margin-bottom:4px}
 
+/* ---------- human-in-the-loop ---------- */
+async function consumeRunStream(res){
+  const rd=res.body.getReader(),dec=new TextDecoder(); let buf='';
+  while(true){ const {value,done}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+    let ps=buf.split('\n\n'); buf=ps.pop();
+    for(const p of ps){ const ev=(p.match(/event: (.*)/)||[])[1],dm=(p.match(/data: (.*)/s)||[])[1]; if(!ev)continue; const d=dm?JSON.parse(dm):{};
+      if(ev==='node'&&cy){ cy.$id(d.node).addClass('running'); }
+      else if(ev==='progress'){ toast('progress: '+JSON.stringify(d.data).slice(0,120)); }
+      else if(ev==='interrupted'){ toast('Paused again — awaiting human'); }
+      else if(ev==='done'){ toast('Resumed run complete'); }
+      else if(ev==='error'){ toast('Resume error: '+(d.message||'failed')); } } }
+  if(VIEW==='runs') loadRuns();
+}
+function parseMaybeJSON(v){ if(v==='')return undefined;
+  try{ return JSON.parse(v); }catch(e){ return v; } }
+window.resumeThread=async(tid)=>{
+  const raw=document.getElementById('hitl-val').value.trim();
+  const body={}; const v=parseMaybeJSON(raw); if(v!==undefined) body.value=v;
+  closeAll(); switchView('graph'); toast('Resuming thread '+tid.slice(0,8)+'…');
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
+  await consumeRunStream(res);
+};
+window.resumeGoto=async(tid)=>{
+  const g=document.getElementById('hitl-goto').value; if(!g) return toast('Pick a node first');
+  closeAll(); switchView('graph'); toast('Redirecting thread to '+g+'…');
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goto:g})});
+  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
+  await consumeRunStream(res);
+};
+window.rerunFrom=async(tid,cid)=>{
+  closeAll(); switchView('graph'); toast('Forking from checkpoint '+String(cid).slice(-8)+'…');
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkpoint_id:cid})});
+  if(!res.ok){ toast((await res.json()).error||'fork failed'); return; }
+  await consumeRunStream(res);
+};
+window.editState=async(tid,cid,valuesJson)=>{
+  const cur=window.prompt('Edit state values (JSON object) — applied via update_state:',valuesJson||'{}');
+  if(cur==null) return;
+  let values; try{ values=JSON.parse(cur); }catch(e){ return toast('Invalid JSON'); }
+  const body={values}; if(cid) body.checkpoint_id=cid;
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await res.json();
+  if(!res.ok) return toast(d.error||'update_state failed');
+  toast('State updated — new checkpoint '+String(d.checkpoint_id||'').slice(-8)+'; Resume to continue');
+  showHistory(tid);
+};
+
 /* ---------- time-travel (checkpoint history) ---------- */
 window.showHistory=async(tid)=>{
   let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history');
@@ -153,6 +205,10 @@ window.showHistory=async(tid)=>{
       <div class="tr-detail" id="${did}">
         ${s.writes!=null?kv('writes',s.writes):''}
         ${kv('state at this checkpoint',s.values)}
+        <div style="display:flex;gap:8px;margin:4px 0 10px">
+          <button class="btn ghost" onclick='rerunFrom("${esc(tid)}","${esc(s.checkpoint_id||'')}")'>⑂ Re-run from here</button>
+          <button class="btn ghost" onclick='editState("${esc(tid)}","${esc(s.checkpoint_id||'')}",${JSON.stringify(JSON.stringify(s.values??{}))})'>✎ Edit state</button>
+        </div>
       </div></div>`;
   }).join('')||'<div class="empty">No checkpoints recorded for this thread</div>';
   $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
@@ -297,6 +353,8 @@ textarea:focus{border-color:var(--accent)}
 .star.on{color:var(--warn)}
 .tagchip{display:inline-block;background:var(--accent-weak);color:var(--accent-text);font-size:10.5px;font-weight:600;
   padding:1.5px 7px;border-radius:5px;margin:1px 4px 1px 0;cursor:pointer}
+.pause-chip{background:var(--surface2);color:var(--text2);border:1px dashed var(--border2)}
+.pause-chip.on{background:var(--warn-weak);color:var(--warn);border-style:solid;border-color:var(--warn)}
 .scorechip{display:inline-block;background:var(--ok-weak);color:var(--ok);font-size:10.5px;font-weight:600;
   padding:1.5px 7px;border-radius:5px;margin:1px 4px 1px 0}
 .pager{display:flex;align-items:center;gap:12px;justify-content:flex-end;margin-top:10px;color:var(--muted);font-size:12.5px}
@@ -396,7 +454,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.9</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.10</span></div>
   </aside>
 
   <main>
@@ -496,6 +554,8 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <input id="run-session" placeholder="session (optional)" style="flex:1;min-width:130px">
       <input id="run-tags" placeholder="tags, comma-separated (optional)" style="flex:1;min-width:160px">
     </div>
+    <div class="hint" style="margin:8px 0 4px">Pause before (static breakpoints — resume from the run drawer):</div>
+    <div id="pause-chips" style="display:flex;flex-wrap:wrap;gap:6px"></div>
     <div class="actions">
       <button class="btn ghost" onclick="closeAll()">Cancel</button>
       <button class="btn primary" id="do-run">${ICON.play} Run</button>
@@ -699,11 +759,17 @@ $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.datas
 
 /* ---------- new run ---------- */
 $('#newrun').onclick=async()=>{ let tpl={}; try{tpl=(await(await fetch('/api/schema')).json()).template||{};}catch(e){}
-  $('#input-json').value=JSON.stringify(tpl,null,2); $('#scrim').classList.add('on'); $('#modal').classList.add('on'); };
+  $('#input-json').value=JSON.stringify(tpl,null,2);
+  const pc=document.getElementById('pause-chips');
+  if(pc&&cy) pc.innerHTML=cy.nodes().filter(n=>!n.data('terminal')).map(n=>
+    `<span class="tagchip pause-chip" data-n="${esc(n.id())}" onclick="this.classList.toggle('on')">${esc(n.id())}</span>`).join('');
+  $('#scrim').classList.add('on'); $('#modal').classList.add('on'); };
 $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json').value||'{}');}catch(e){return toast('Invalid JSON input');}
   const sess=$('#run-session').value.trim();
   const tags=$('#run-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
   if(sess)input._session=sess; if(tags.length)input._tags=tags;
+  const paused=[...document.querySelectorAll('.pause-chip.on')].map(e=>e.dataset.n);
+  if(paused.length) input._interrupt_before=paused;
   closeAll(); switchView('graph'); await runNow(input); };
 
 async function runNow(input){
@@ -822,6 +888,19 @@ async function openRun(id){
       <span class="chip node">${esc(s.name)}</span>
       ${Object.keys(s.output).map(k=>`<span class="tagchip" style="cursor:default">${esc(k)}</span>`).join('')}
       <span style="color:var(--muted);font-size:11px;margin-left:auto" class="mono">${s.dur_ms!=null?fmtms(s.dur_ms):''}</span></div>`).join('');
+  if(r.status==='interrupted'&&r.thread_id){
+    const ivs=r.spans.filter(s=>s.type==='interrupt'); const iv=ivs.find(s=>s.output!=null)||ivs.pop();
+    html += `<div class="kv" style="margin-top:14px"><div class="k" style="color:var(--warn)">interrupt — awaiting human</div>
+      ${iv&&iv.output!=null?`<pre>${esc(JSON.stringify(iv.output,null,2))}</pre>`:'<pre>paused at a breakpoint</pre>'}
+      <div class="scoreadd" style="margin-top:8px">
+        <input id="hitl-val" placeholder='resume value — JSON or text (blank = just continue)' style="flex:1;min-width:200px">
+        <button class="btn primary" onclick="resumeThread('${esc(r.thread_id)}')">Resume</button>
+      </div>
+      <div class="scoreadd">
+        <select id="hitl-goto"><option value="">goto node (optional)…</option></select>
+        <button class="btn ghost" onclick="resumeGoto('${esc(r.thread_id)}')">Send to node</button>
+      </div></div>`;
+  }
   html += `<div class="kv" style="margin-top:14px"><div class="k">scores</div></div>
     ${(r.scores||[]).map(sc=>`<div class="scorerow"><span class="scorechip">${esc(sc.name)} ${sc.value}</span>
       ${sc.comment?`<span style="color:var(--muted);font-size:12px">${esc(sc.comment)}</span>`:''}
@@ -838,6 +917,9 @@ async function openRun(id){
   $('#d-body').innerHTML=html;
   openIds.forEach(i=>{const e=document.getElementById(i); if(e){e.style.display='block';
     const row=e.previousElementSibling; row&&row.querySelector('.caret')?.classList.add('open');}});
+  const gsel=document.getElementById('hitl-goto');
+  if(gsel&&cy) gsel.innerHTML='<option value="">goto node (optional)…</option>'+
+    cy.nodes().filter(n=>!n.data('terminal')).map(n=>`<option>${esc(n.id())}</option>`).join('');
   $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
   clearTimeout(window.__liveT);
   if(r.status==='running')
@@ -906,6 +988,58 @@ window.showSpanSource=async(sid)=>{
                   :'<pre>no source available for this node (external run, or inspect could not trace it)</pre>';
 };
 
+/* ---------- human-in-the-loop ---------- */
+async function consumeRunStream(res){
+  const rd=res.body.getReader(),dec=new TextDecoder(); let buf='';
+  while(true){ const {value,done}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+    let ps=buf.split('\n\n'); buf=ps.pop();
+    for(const p of ps){ const ev=(p.match(/event: (.*)/)||[])[1],dm=(p.match(/data: (.*)/s)||[])[1]; if(!ev)continue; const d=dm?JSON.parse(dm):{};
+      if(ev==='node'&&cy){ cy.$id(d.node).addClass('running'); }
+      else if(ev==='progress'){ toast('progress: '+JSON.stringify(d.data).slice(0,120)); }
+      else if(ev==='interrupted'){ toast('Paused again — awaiting human'); }
+      else if(ev==='done'){ toast('Resumed run complete'); }
+      else if(ev==='error'){ toast('Resume error: '+(d.message||'failed')); } } }
+  if(VIEW==='runs') loadRuns();
+}
+function parseMaybeJSON(v){ if(v==='')return undefined;
+  try{ return JSON.parse(v); }catch(e){ return v; } }
+window.resumeThread=async(tid)=>{
+  const raw=document.getElementById('hitl-val').value.trim();
+  const body={}; const v=parseMaybeJSON(raw); if(v!==undefined) body.value=v;
+  closeAll(); switchView('graph'); toast('Resuming thread '+tid.slice(0,8)+'…');
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
+  await consumeRunStream(res);
+};
+window.resumeGoto=async(tid)=>{
+  const g=document.getElementById('hitl-goto').value; if(!g) return toast('Pick a node first');
+  closeAll(); switchView('graph'); toast('Redirecting thread to '+g+'…');
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goto:g})});
+  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
+  await consumeRunStream(res);
+};
+window.rerunFrom=async(tid,cid)=>{
+  closeAll(); switchView('graph'); toast('Forking from checkpoint '+String(cid).slice(-8)+'…');
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkpoint_id:cid})});
+  if(!res.ok){ toast((await res.json()).error||'fork failed'); return; }
+  await consumeRunStream(res);
+};
+window.editState=async(tid,cid,valuesJson)=>{
+  const cur=window.prompt('Edit state values (JSON object) — applied via update_state:',valuesJson||'{}');
+  if(cur==null) return;
+  let values; try{ values=JSON.parse(cur); }catch(e){ return toast('Invalid JSON'); }
+  const body={values}; if(cid) body.checkpoint_id=cid;
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const d=await res.json();
+  if(!res.ok) return toast(d.error||'update_state failed');
+  toast('State updated — new checkpoint '+String(d.checkpoint_id||'').slice(-8)+'; Resume to continue');
+  showHistory(tid);
+};
+
 /* ---------- time-travel (checkpoint history) ---------- */
 window.showHistory=async(tid)=>{
   let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history');
@@ -929,6 +1063,10 @@ window.showHistory=async(tid)=>{
       <div class="tr-detail" id="${did}">
         ${s.writes!=null?kv('writes',s.writes):''}
         ${kv('state at this checkpoint',s.values)}
+        <div style="display:flex;gap:8px;margin:4px 0 10px">
+          <button class="btn ghost" onclick='rerunFrom("${esc(tid)}","${esc(s.checkpoint_id||'')}")'>⑂ Re-run from here</button>
+          <button class="btn ghost" onclick='editState("${esc(tid)}","${esc(s.checkpoint_id||'')}",${JSON.stringify(JSON.stringify(s.values??{}))})'>✎ Edit state</button>
+        </div>
       </div></div>`;
   }).join('')||'<div class="empty">No checkpoints recorded for this thread</div>';
   $('#scrim').classList.add('on'); $('#drawer').classList.add('on');

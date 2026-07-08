@@ -360,6 +360,69 @@ def test_demo_memory_and_events_end_to_end():
     print("demo memory + custom event end-to-end OK")
 
 
+def test_hitl_interrupt_resume():
+    """Dynamic interrupt pauses (status interrupted); Command(resume) finishes."""
+    from typing import TypedDict
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import MemorySaver
+    from langgraph.types import Command, interrupt
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+
+    class St(TypedDict):
+        x: int
+    def gate(st):
+        ok = interrupt({"question": f"allow x={st['x']}?"})
+        return {"x": st["x"] if ok else 0}
+    g = StateGraph(St)
+    g.add_node("gate", gate)
+    g.add_edge(START, "gate"); g.add_edge("gate", END)
+    app = g.compile(checkpointer=MemorySaver())
+    cfgc = {"configurable": {"thread_id": "hitl-1"}}
+
+    tr1 = SpanBuilder(db_sink(s), run_name="hitl")
+    out = app.invoke({"x": 5}, config={"callbacks": [tr1], **cfgc})
+    assert "__interrupt__" in out
+    time.sleep(.05)
+    assert s.run_detail(tr1.run_id)["status"] == "interrupted"
+
+    tr2 = SpanBuilder(db_sink(s), run_name="hitl")
+    out2 = app.invoke(Command(resume=True), config={"callbacks": [tr2], **cfgc})
+    assert out2["x"] == 5
+    time.sleep(.05)
+    assert s.run_detail(tr2.run_id)["status"] == "done"
+    print("HITL interrupt/resume OK")
+
+
+def test_static_breakpoint_and_state_edit():
+    """interrupt_before pauses with pending next; update_state edit sticks."""
+    from typing import TypedDict
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import MemorySaver
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+
+    class St(TypedDict):
+        x: int
+    g = StateGraph(St)
+    g.add_node("inc", lambda st: {"x": st["x"] + 1})
+    g.add_node("mul", lambda st: {"x": st["x"] * 10})
+    g.add_edge(START, "inc"); g.add_edge("inc", "mul"); g.add_edge("mul", END)
+    app = g.compile(checkpointer=MemorySaver())
+    cfgc = {"configurable": {"thread_id": "bp-1"}}
+
+    tr = SpanBuilder(db_sink(s), run_name="bp")
+    for _ in app.stream({"x": 1}, config={"callbacks": [tr], **cfgc},
+                        stream_mode="updates", interrupt_before=["mul"]):
+        pass
+    st = app.get_state(cfgc)
+    assert st.next == ("mul",), st.next          # paused before mul
+    app.update_state(cfgc, {"x": 100})           # human edits the state
+    out = app.invoke(None, config=cfgc)          # continue
+    assert out["x"] == 1000, out                 # 100 * 10 — edit took effect
+    print("static breakpoint + state edit OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -377,4 +440,6 @@ if __name__ == "__main__":
     test_datasets_and_scoring()
     test_ttft_retry_custom_event_usage_detail()
     test_demo_memory_and_events_end_to_end()
+    test_hitl_interrupt_resume()
+    test_static_breakpoint_and_state_edit()
     print("ALL SMOKE TESTS PASSED")

@@ -62,8 +62,11 @@ graph.invoke(input, config={
 - **Clickable graph** — tap a node for health, latency, wiring, its **source code**, and recent executions with payloads.
 - **Error forensics** — failed runs show the full traceback; the failing node turns red on the
   graph, and the node's source renders with the **throwing line highlighted**.
-- **Human-in-the-loop aware** — a graph paused on `interrupt()` shows an amber **interrupted**
-  status plus the payload it's asking a human about.
+- **Human-in-the-loop console** — a paused graph shows an amber **interrupted** status with the
+  question it's asking; answer it (`Command(resume=…)`), redirect it (`Command(goto=…)`), set
+  static breakpoints per run (`interrupt_before`), **edit state** at any checkpoint
+  (`update_state`), or **fork** a thread from any historical checkpoint — all from the UI,
+  all pure LangGraph primitives.
 - **State evolution** — every trace shows which state keys each node wrote, in order.
 - **X-ray** — graphs with subgraphs get a canvas toggle that expands composite nodes
   (`get_graph(xray=True)`).

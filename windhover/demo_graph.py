@@ -24,7 +24,15 @@ def seed(s):
     if n < 0:
         raise ValueError(f"n must be non-negative, got {n} — the demo guard tripped")
     return {"n": n}
-def grow(s):       time.sleep(.3);  return {"n": s["n"] * 3}
+def grow(s):
+    time.sleep(.3)
+    grown = s["n"] * 3
+    if grown > 500:  # human-in-the-loop: big growth needs approval
+        from langgraph.types import interrupt
+        approved = interrupt({"question": f"grow {s['n']} -> {grown}? (true/false)"})
+        if not approved:
+            return {"n": s["n"]}
+    return {"n": grown}
 def parity(s):     time.sleep(.4);  return {"notes": ["even" if s["n"] % 2 == 0 else "odd"]}
 def sign(s):       time.sleep(.25); return {"notes": ["positive" if s["n"] > 0 else "non-positive"]}
 def magnitude(s):  time.sleep(.35); return {"notes": ["big" if abs(s["n"]) > 100 else "small"]}

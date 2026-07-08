@@ -137,6 +137,7 @@ class SpanBuilder(BaseCallbackHandler):
         self._open: dict[str, dict] = {}   # langchain run_id -> pending span
         self._span_of: dict[str, str] = {} # langchain run_id -> our span id (for parent links)
         self._seq = 0
+        self._interrupted = False
 
     # -- infra --
     def _emit(self, ev: dict) -> None:
@@ -206,8 +207,11 @@ class SpanBuilder(BaseCallbackHandler):
             # LangGraph human-in-the-loop: a paused graph surfaces __interrupt__
             # in its final output — that's a pause awaiting Command(resume=...),
             # not a completion.
-            interrupted = isinstance(outputs, dict) and "__interrupt__" in outputs
-            if interrupted:
+            interrupted = self._interrupted or (
+                isinstance(outputs, dict) and "__interrupt__" in outputs)
+            if interrupted and not self._interrupted:
+                # marker not yet emitted by the GraphInterrupt path
+                self._interrupted = True
                 self._finish_span(
                     {"span_id": uuid.uuid4().hex[:12], "type": "interrupt",
                      "name": "interrupt", "t": time.time(), "parent": None,
@@ -219,6 +223,32 @@ class SpanBuilder(BaseCallbackHandler):
 
     def on_chain_error(self, error, *, run_id=None, **kw):
         info = self._open.pop(run_id, None)
+        # LangGraph signals a human-in-the-loop pause by raising GraphInterrupt
+        # through the node — that's a pause, not a failure.
+        if type(error).__name__ in ("GraphInterrupt", "NodeInterrupt"):
+            payload = []
+            try:
+                for i in (error.args[0] if error.args else []):
+                    payload.append(getattr(i, "value", str(i)))
+            except Exception:
+                pass
+            if info:
+                self._finish_span(info, status="interrupted",
+                                  output=_trunc(payload) if payload else None)
+            if not self._interrupted:  # one marker span per pause
+                self._interrupted = True
+                now = time.time()
+                self._emit({"kind": "span", "id": uuid.uuid4().hex[:12],
+                            "run_id": self.run_id, "parent_id": None,
+                            "seq": self._seq, "type": "interrupt", "name": "interrupt",
+                            "status": "ok", "started_ms": int(now * 1000),
+                            "ended_ms": int(now * 1000), "offset_ms": self._rel(now),
+                            "dur_ms": 0, "input": None,
+                            "output": _trunc(payload) if payload else None,
+                            "model": None, "prompt_tokens": None,
+                            "completion_tokens": None, "cost_usd": None, "error": None})
+                self._seq += 1
+            return
         err = _err_text(error)
         if info:
             self._finish_span(info, status="error", error=err)
