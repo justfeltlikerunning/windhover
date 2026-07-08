@@ -783,3 +783,42 @@ def test_overview_fleet():
     # gamma still lists its ancient run in recent (review, not amnesia)
     assert by["gamma"]["recent"][0]["id"] == "c0"
     print("overview fleet OK")
+
+
+def test_awaiting_count_and_webhook_parse_and_digest():
+    # awaiting_count mirrors the overview attention rule
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    now = int(time.time() * 1000)
+    s.open_run({"id": "w1", "graph": "g", "thread_id": "ta", "started_ms": now - 100})
+    s.close_run("w1", "interrupted", now - 90)
+    s.open_run({"id": "w2", "graph": "g", "thread_id": "tb", "started_ms": now - 80})
+    s.close_run("w2", "interrupted", now - 70)
+    assert s.awaiting_count() == 2
+    s.open_run({"id": "w2r", "graph": "g", "thread_id": "tb", "started_ms": now - 50})
+    s.close_run("w2r", "done", now - 40)
+    assert s.awaiting_count() == 1          # tb was resumed -> handled
+
+    # WINDHOVER_WEBHOOK parsing: default + per-graph, query strings survive
+    from windhover.config import Config
+    d, m = Config._parse_webhooks("https://hooks.example/a?x=1")
+    assert d == "https://hooks.example/a?x=1" and m == {}
+    d, m = Config._parse_webhooks(
+        "https://hooks.example/default, atp=https://hooks.example/atp?k=v ,other=https://h.example/o")
+    assert d == "https://hooks.example/default"
+    assert m == {"atp": "https://hooks.example/atp?k=v", "other": "https://h.example/o"}
+    d, m = Config._parse_webhooks("")
+    assert d == "" and m == {}
+
+    # digest builder: quiet day -> None; busy day -> counts in the body
+    from windhover.push import digest_summary
+    assert digest_summary({"graphs": [{"name": "g", "runs_7d": 0, "errors_7d": 0}],
+                           "attention": []}) is None
+    msg = digest_summary({
+        "graphs": [{"name": "a", "runs_7d": 5, "errors_7d": 1},
+                   {"name": "b", "runs_7d": 2, "errors_7d": 0}],
+        "attention": [{"status": "interrupted"}, {"status": "running"}]})
+    assert msg["tag"] == "windhover-digest" and msg["url"] == "/#fleet"
+    assert "7 runs" in msg["body"] and "1 error" in msg["body"]
+    assert "1 awaiting approval" in msg["body"]
+    print("awaiting/webhook-parse/digest OK")

@@ -135,10 +135,16 @@ discovery, else ingest-only) · `WINDHOVER_GRAPH_DIR` · `WINDHOVER_DB`
 · `WINDHOVER_RETENTION_DAYS` (0 = keep forever; else prune older runs on startup + every 6h)
 · `WINDHOVER_TOKEN` (set to require `Authorization: Bearer <token>` — or `?token=` — on all
 `/api` routes; the UI prompts once and remembers it)
-· `WINDHOVER_WEBHOOK` (POST a JSON alert whenever a run errors or pauses on an interrupt)
+· `WINDHOVER_WEBHOOK` (POST a JSON alert whenever a run errors or pauses on an interrupt;
+accepts a single URL, or a comma list mixing a default with per-graph `name=url` overrides —
+e.g. `https://hooks.example/all,billing=https://hooks.example/billing`)
 · `WINDHOVER_VAPID_PUBLIC`/`WINDHOVER_VAPID_PRIVATE` (base64url VAPID keypair — set both to
 enable browser Web Push; unset = feature hidden) · `WINDHOVER_VAPID_SUBJECT` (a `mailto:` or
-`https:` contact URL sent to the push service; use a real domain — some services reject `.local`).
+`https:` contact URL sent to the push service; use a real domain — some services reject `.local`)
+· `WINDHOVER_DIGEST` (`HH:MM` local time for one daily summary push — runs/errors/awaiting
+across all graphs, linking to the fleet; quiet days send nothing; requires Web Push keys).
+When several runs await approval, interrupt pushes link to the fleet queue instead of a
+single run.
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
 
 **Web Push setup:** generate a VAPID keypair (e.g. `openssl`/`py-vapid`), set the three env

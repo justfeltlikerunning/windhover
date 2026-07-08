@@ -27,6 +27,8 @@ class Config:
     vapid_public: str       # WINDHOVER_VAPID_PUBLIC: base64url app-server key ("" = web push off)
     vapid_private: str      # WINDHOVER_VAPID_PRIVATE: base64url private key
     vapid_subject: str      # WINDHOVER_VAPID_SUBJECT: contact (mailto:/https URL) sent to the push service
+    digest: str             # WINDHOVER_DIGEST: "HH:MM" local time for a daily summary push ("" = off)
+    webhook_map: dict       # per-graph webhook overrides from WINDHOVER_WEBHOOK "name=url" entries
 
     @property
     def push_enabled(self) -> bool:
@@ -36,6 +38,26 @@ class Config:
     def graph_ref(self) -> str:
         """First graph's ref — kept for single-graph callers/back-compat."""
         return self.graphs[0][1] if self.graphs else ""
+
+    @staticmethod
+    def _parse_webhooks(raw: str) -> tuple:
+        """WINDHOVER_WEBHOOK: a URL, or a comma list mixing a default URL with
+        per-graph "name=url" overrides. '=' only counts before '://' so query
+        strings in plain URLs stay intact. Returns (default_url, {name: url})."""
+        default, per = "", {}
+        for part in (raw or "").split(","):
+            part = part.strip()
+            if not part:
+                continue
+            scheme = part.find("://")
+            eq = part.find("=")
+            if eq != -1 and (scheme == -1 or eq < scheme):
+                name, _, url = part.partition("=")
+                if name.strip() and url.strip():
+                    per[name.strip()] = url.strip()
+            else:
+                default = part
+        return default, per
 
     @staticmethod
     def _parse_env_graphs(raw: str) -> tuple:
@@ -82,6 +104,7 @@ class Config:
             graphs = cls._parse_env_graphs(raw)
         else:
             graphs, graph_dir = cls._discover()
+        webhook, webhook_map = cls._parse_webhooks(os.environ.get("WINDHOVER_WEBHOOK", ""))
         return cls(
             graphs=graphs,
             graph_dir=graph_dir,
@@ -92,8 +115,10 @@ class Config:
             pricing_path=os.environ.get("WINDHOVER_PRICING", str(PKG_DIR / "pricing.json")),
             retention_days=int(os.environ.get("WINDHOVER_RETENTION_DAYS", "0") or 0),
             token=os.environ.get("WINDHOVER_TOKEN", ""),
-            webhook=os.environ.get("WINDHOVER_WEBHOOK", ""),
+            webhook=webhook,
             vapid_public=os.environ.get("WINDHOVER_VAPID_PUBLIC", ""),
             vapid_private=os.environ.get("WINDHOVER_VAPID_PRIVATE", ""),
             vapid_subject=os.environ.get("WINDHOVER_VAPID_SUBJECT", "mailto:windhover@localhost"),
+            digest=os.environ.get("WINDHOVER_DIGEST", ""),
+            webhook_map=webhook_map,
         )

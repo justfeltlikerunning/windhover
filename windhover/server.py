@@ -162,13 +162,18 @@ if cfg.retention_days > 0:
 
 
 def _fire_webhook(summary: dict) -> None:
-    """POST a compact alert when a run needs attention. Fire-and-forget."""
+    """POST a compact alert when a run needs attention. Fire-and-forget.
+    Per-graph overrides (WINDHOVER_WEBHOOK "name=url" entries) win over the
+    default URL; a graph with neither stays silent."""
     if summary.get("status") not in ("error", "interrupted"):
         return
     def _post():
         try:
             import urllib.request
             run = store.run_detail(summary["id"]) or summary
+            hook = cfg.webhook_map.get(run.get("graph") or _default_name()) or cfg.webhook
+            if not hook:
+                return
             body = {
                 "source": "windhover", "graph": run.get("graph") or _default_name(),
                 "run_id": summary["id"], "status": summary["status"],
@@ -179,7 +184,7 @@ def _fire_webhook(summary: dict) -> None:
                         f" ({run.get('graph') or _default_name()})",
             }
             req = urllib.request.Request(
-                cfg.webhook, data=json.dumps(body).encode(),
+                hook, data=json.dumps(body).encode(),
                 headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=5)
         except Exception:
@@ -194,23 +199,61 @@ def _push_alert(summary: dict) -> None:
     run = store.run_detail(summary["id"]) or summary
     graph = run.get("graph") or _default_name()
     err = (str(summary.get("error") or "").strip().splitlines() or [""])[-1]
+    title = f"Windhover — run {summary['status']}"
+    body = f"{graph} · {summary['id']}" + (f"\n{err}" if err else "")
+    tag, url = summary["id"], f"/#run={summary['id']}"
+    if summary["status"] == "interrupted":
+        try:
+            n = store.awaiting_count()
+        except Exception:
+            n = 1
+        if n > 1:  # several await — land on the fleet queue, not one run
+            title = f"Windhover — {n} runs awaiting approval"
+            body = f"latest: {graph} · {summary['id']}"
+            tag, url = "windhover-awaiting", "/#fleet"
     push.send_to_all(store, cfg, {
-        "title": f"Windhover — run {summary['status']}",
-        "body": f"{graph} · {summary['id']}" + (f"\n{err}" if err else ""),
-        "tag": summary["id"], "url": f"/#run={summary['id']}",
+        "title": title, "body": body, "tag": tag, "url": url,
         "status": summary["status"],
     })
 
 
 def _on_run_closed(summary: dict) -> None:
-    if cfg.webhook:
+    if cfg.webhook or cfg.webhook_map:
         _fire_webhook(summary)
     if cfg.push_enabled:
         _push_alert(summary)
 
 
-if cfg.webhook or cfg.push_enabled:
+if cfg.webhook or cfg.webhook_map or cfg.push_enabled:
     store.on_run_closed = _on_run_closed
+
+
+def _digest_loop() -> None:
+    """Daily summary push at WINDHOVER_DIGEST (local HH:MM). Quiet days skip."""
+    hh, mm = (int(x) for x in cfg.digest.split(":"))
+    while True:
+        now = time.localtime()
+        target = time.mktime((now.tm_year, now.tm_mon, now.tm_mday, hh, mm, 0,
+                              0, 0, -1))
+        if target <= time.time():
+            target += 86400
+        time.sleep(max(1, target - time.time()))
+        try:
+            payload = push.digest_summary(store.overview(days=1,
+                                          serving=tuple(GRAPHS.keys())))
+            if payload:
+                push.send_to_all(store, cfg, payload)
+        except Exception as e:
+            print(f"[digest] {e}")
+        time.sleep(61)  # step past the minute so one schedule fires once
+
+
+if cfg.digest and cfg.push_enabled:
+    try:
+        int(cfg.digest.split(":")[0]); int(cfg.digest.split(":")[1])
+        threading.Thread(target=_digest_loop, daemon=True).start()
+    except Exception:
+        print(f"[digest] invalid WINDHOVER_DIGEST={cfg.digest!r} — expected HH:MM")
 
 
 def _template(schema: dict) -> dict:

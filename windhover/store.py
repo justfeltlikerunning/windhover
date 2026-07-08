@@ -461,6 +461,16 @@ class Store:
                     g["last_run"] = d
         return {"attention": att, "graphs": list(by_graph.values())}
 
+    def awaiting_count(self) -> int:
+        """Interrupted runs still awaiting a human (same resumed-thread rule
+        as overview(): a newer run on the thread means it was handled)."""
+        with _lock, self._conn() as c:
+            return c.execute("""SELECT COUNT(*) FROM runs r
+                WHERE r.status='interrupted'
+                AND (r.thread_id IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM runs r2 WHERE r2.thread_id = r.thread_id
+                    AND r2.id != r.id AND r2.started_ms > r.started_ms))""").fetchone()[0]
+
     def run_detail(self, run_id: str) -> Optional[dict]:
         with _lock, self._conn() as c:
             r = c.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()

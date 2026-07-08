@@ -45,6 +45,30 @@ def _send_one(sub: dict, payload: str, cfg) -> int | None:
         return None
 
 
+def digest_summary(overview: dict) -> dict | None:
+    """Build the daily-digest notification from an overview() snapshot.
+
+    Returns None when there is nothing worth waking anyone for (no runs in
+    the window and nothing awaiting) — a silent day stays silent.
+    """
+    graphs = [g for g in overview.get("graphs", []) if g.get("name")]
+    runs = sum(g.get("runs_7d", 0) for g in graphs)      # caller passes days=1
+    errors = sum(g.get("errors_7d", 0) for g in graphs)
+    awaiting = sum(1 for a in overview.get("attention", [])
+                   if a.get("status") == "interrupted")
+    active = [g for g in graphs if g.get("runs_7d")]
+    if runs == 0 and awaiting == 0:
+        return None
+    parts = [f"{runs} run{'s' if runs != 1 else ''} across "
+             f"{len(active)} graph{'s' if len(active) != 1 else ''}"]
+    if errors:
+        parts.append(f"{errors} error{'s' if errors != 1 else ''}")
+    if awaiting:
+        parts.append(f"{awaiting} awaiting approval")
+    return {"title": "Windhover — daily digest", "body": " · ".join(parts),
+            "tag": "windhover-digest", "url": "/#fleet" if len(graphs) > 1 else "/"}
+
+
 def send_to_all(store, cfg, payload: dict) -> None:
     """Fan a notification payload out to all subscriptions (fire-and-forget)."""
     if not (_AVAILABLE and cfg.push_enabled):

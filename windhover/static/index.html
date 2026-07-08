@@ -457,6 +457,9 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
   .legend{display:none}
   /* keep toasts clear of the fixed bottom nav */
   .toast{left:12px;right:12px;max-width:none;bottom:calc(env(safe-area-inset-bottom) + 96px)}
+  /* iOS zooms the page when a focused input's font-size is under 16px —
+     hold every text control at 16px on phones so focus never zooms */
+  input,select,textarea{font-size:16px !important}
 }
 /* fleet — cross-graph overview */
 .fh{font-family:var(--display);font-size:19px;font-weight:600}
@@ -1498,7 +1501,9 @@ if('serviceWorker' in navigator){
     if(d.type!=='open-url'||!d.url) return;
     const u=new URL(d.url,location.origin);
     const run=u.hash.startsWith('#run=')?u.hash.slice(5):new URLSearchParams(u.search).get('run');
+    const view=u.hash.slice(1);
     if(run){ history.replaceState(null,'','#run='+run); switchView('runs'); openRun(run); }
+    else if(['fleet','runs','sessions','stats','graph'].includes(view)) switchView(view);
   });
   /* cold start: iOS launches a closed PWA at start_url and drops the notification
      URL — ask the sw whether a notification tap is what launched us */
