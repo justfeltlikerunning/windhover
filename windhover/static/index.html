@@ -461,6 +461,25 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
      hold every text control at 16px on phones so focus never zooms */
   input,select,textarea{font-size:16px !important}
 }
+/* artifacts — files a run wrote */
+.artrow{display:flex;align-items:center;gap:9px;padding:7px 2px;border-bottom:1px solid var(--border);font-size:12.5px}
+.artrow:last-child{border-bottom:none}
+.artkind{font:600 10px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:3px 7px;border-radius:6px;
+  background:var(--accent-weak);color:var(--accent-text)}
+.artkind.image{background:var(--chip-llm);color:var(--chip-llm-t)}
+.artkind.file{background:var(--surface2);color:var(--muted)}
+.artname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.artsize{color:var(--muted);font:11px var(--mono);white-space:nowrap}
+.artrow .copy{margin-left:auto} .artrow .copy+ .copy,.artrow .copy+a.copy{margin-left:0}
+a.copy{text-decoration:none}
+#art-modal .box{width:min(980px,calc(100vw - 24px));max-height:calc(100dvh - 40px);display:flex;flex-direction:column}
+#art-body{flex:1;min-height:200px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface2)}
+#art-body iframe{width:100%;height:min(70vh,720px);border:none;display:block;background:#fff}
+#art-body img{max-width:100%;display:block;margin:0 auto}
+#art-body pre{margin:0;padding:12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word}
+#art-body table{border-collapse:collapse;font:12px var(--mono);width:100%}
+#art-body td,#art-body th{border:1px solid var(--border);padding:4px 8px;text-align:left;white-space:nowrap}
+
 /* fleet — cross-graph overview */
 .fh{font-family:var(--display);font-size:19px;font-weight:600}
 .fatt{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--warn);
@@ -524,7 +543,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.14</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><a href="https://buymeacoffee.com/justfeltlikerunning" target="_blank" rel="noopener" title="Buy me a coffee" style="text-decoration:none;filter:grayscale(35%)">☕</a><span class="mono" id="ver">v0.14</span></div>
   </aside>
 
   <main>
@@ -622,6 +641,17 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
     <div class="dmeta" id="d-meta"></div>
   </div>
   <div class="dbody" id="d-body"></div>
+</div>
+
+<div class="modal" id="art-modal" onclick="if(event.target===this)closeArt()">
+  <div class="box">
+    <h2 id="art-title" class="mono" style="font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">artifact</h2>
+    <div id="art-body"></div>
+    <div class="actions" style="margin-top:10px">
+      <a class="btn ghost" id="art-dl" download>Download</a>
+      <button class="btn primary" onclick="closeArt()">Close</button>
+    </div>
+  </div>
 </div>
 
 <div class="modal" id="modal">
@@ -1031,6 +1061,7 @@ async function loadSessions(){
 async function openRun(id){
   const r=await(await fetch('/api/runs/'+id)).json();
   window.__run=r;
+  let ARTS=[]; try{ ARTS=(await(await fetch('/api/runs/'+id+'/artifacts')).json()).artifacts||[]; }catch(e){}
   $('#d-title').textContent=(r.graph||'run')+' · '+id.slice(0,8);
   const st=$('#d-status'); st.className='status '+r.status; $('#d-status-t').textContent=r.status;
   $('#d-meta').innerHTML=[
@@ -1068,6 +1099,17 @@ async function openRun(id){
         <select id="hitl-goto"><option value="">goto node (optional)…</option></select>
         <button class="btn ghost" onclick="resumeGoto('${esc(r.thread_id)}')">Send to node</button>
       </div></div>`;
+  }
+  if(ARTS.length){
+    html += `<div class="kv" style="margin-top:14px"><div class="k">artifacts — files this run wrote</div></div>`+
+      ARTS.map(a=>`<div class="artrow">
+        <span class="artkind ${a.kind}">${esc(a.ext)}</span>
+        <span class="artname mono" title="${esc(a.path)}">${esc(a.name)}</span>
+        ${a.exists?`<span class="artsize">${a.size<1024?a.size+' B':a.size<1048576?(a.size/1024).toFixed(1)+' KB':(a.size/1048576).toFixed(1)+' MB'}</span>`
+                  :`<span class="tagchip" title="recorded by the run, but not readable on this host">missing here</span>`}
+        ${a.exists&&a.inline?`<button class="copy" onclick="previewArt('${id}','${encodeURIComponent(a.path)}','${a.kind}','${a.ext}','${esc(a.name)}')">preview</button>`:''}
+        ${a.exists?`<a class="copy" href="/api/runs/${id}/artifact?path=${encodeURIComponent(a.path)}${whToken()?'&token='+encodeURIComponent(whToken()):''}" download="${esc(a.name)}">download</a>`:''}
+      </div>`).join('');
   }
   html += `<div class="kv" style="margin-top:14px"><div class="k">scores</div></div>
     ${(r.scores||[]).map(sc=>`<div class="scorerow"><span class="scorechip">${esc(sc.name)} ${sc.value}</span>
@@ -1352,6 +1394,36 @@ function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','
 function fmtms(ms){ return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s'; }
 function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
 function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
+
+/* ---------- artifacts (files a run wrote) ---------- */
+function closeArt(){ const m=$('#art-modal'); m.classList.remove('on'); $('#art-body').innerHTML=''; }
+window.previewArt=async(runId,encPath,kind,ext,name)=>{
+  const tok=whToken()?'&token='+encodeURIComponent(whToken()):'';
+  const url=`/api/runs/${runId}/artifact?path=${encPath}${tok}`;
+  $('#art-title').textContent=name;
+  const dl=$('#art-dl'); dl.href=url; dl.setAttribute('download',name);
+  const body=$('#art-body');
+  if(kind==='html') body.innerHTML=`<iframe sandbox="" src="${url}"></iframe>`;          // scripts stay off
+  else if(kind==='pdf') body.innerHTML=`<iframe src="${url}"></iframe>`;
+  else if(kind==='image') body.innerHTML=`<img src="${url}" alt="${esc(name)}">`;
+  else{ // text-ish: fetch and render (py highlighted, csv as a table)
+    body.innerHTML='<pre>loading…</pre>';
+    try{
+      const t=await(await fetch(`/api/runs/${runId}/artifact?path=${encPath}`)).text();
+      const capped=t.length>400000?t.slice(0,400000)+'\n… (truncated preview — download for the full file)':t;
+      if(ext==='csv'||ext==='tsv'){
+        const sep=ext==='tsv'?'\t':',';
+        const rows=capped.split(/\r?\n/).filter(Boolean).slice(0,200).map(l=>l.split(sep));
+        body.innerHTML='<div style="overflow:auto"><table>'+rows.map((r,i)=>
+          `<tr>${r.map(c=>`<t${i?'d':'h'}>${esc(c)}</t${i?'d':'h'}>`).join('')}</tr>`).join('')+'</table></div>'+
+          (t.split(/\r?\n/).length>200?'<pre>… first 200 rows shown — download for the rest</pre>':'');
+      }else if(ext==='py'){
+        body.innerHTML='<pre>'+capped.split('\n').map(l=>pyHi(l)||' ').join('\n')+'</pre>';
+      }else body.innerHTML='<pre>'+esc(capped)+'</pre>';
+    }catch(e){ body.innerHTML='<pre>could not load preview</pre>'; }
+  }
+  $('#art-modal').classList.add('on');
+};
 
 /* ---------- fleet (cross-graph overview) ---------- */
 function _fleetSelect(graph){

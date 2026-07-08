@@ -822,3 +822,36 @@ def test_awaiting_count_and_webhook_parse_and_digest():
     assert "7 runs" in msg["body"] and "1 error" in msg["body"]
     assert "1 awaiting approval" in msg["body"]
     print("awaiting/webhook-parse/digest OK")
+
+
+def test_artifacts_extract_classify_resolve():
+    from windhover.artifacts import extract_paths, classify, run_artifacts, resolve
+    # extraction: nested structures, dedupe, extension filter, non-paths ignored
+    obj = {"docs": ["/out/report.docx", "/out/report.docx"],
+           "chart": {"png": "/tmp/chart.png"},
+           "notes": ["not/a/path.docx", "no extension /tmp/file", "plain text"],
+           "win": r"C:\out\sheet.xlsx", "home": "~/data/results.csv",
+           "url": "https://example.com/page.html"}
+    got = extract_paths(obj)
+    assert got == ["/out/report.docx", "/tmp/chart.png", r"C:\out\sheet.xlsx",
+                   "~/data/results.csv"], got
+    # classification: inline vs download
+    assert classify("/a/b.html")["kind"] == "html" and classify("/a/b.html")["inline"]
+    assert classify("/a/b.pdf")["inline"] and classify("/a/b.py")["kind"] == "text"
+    assert classify("/a/b.docx")["inline"] is False
+    assert classify("/a/b.PNG")["kind"] == "image"
+
+    # run_artifacts + resolve against real files
+    d = tempfile.mkdtemp()
+    real = os.path.join(d, "report.html")
+    open(real, "w").write("<h1>hi</h1>")
+    run = {"input": {"x": 1},
+           "spans": [{"output": {"docs": [real, os.path.join(d, "gone.pdf")]}}]}
+    arts = run_artifacts(run)
+    assert [a["exists"] for a in arts] == [True, False]
+    assert arts[0]["size"] == 11 and arts[0]["name"] == "report.html"
+    # resolve: recorded+exists -> real path; recorded+missing -> None; unrecorded -> None
+    assert resolve(run, real) == real
+    assert resolve(run, os.path.join(d, "gone.pdf")) is None
+    assert resolve(run, "/etc/passwd") is None          # never, even though it exists
+    print("artifacts extract/classify/resolve OK")

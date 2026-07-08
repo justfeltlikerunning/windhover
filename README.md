@@ -3,7 +3,8 @@
 <p align="center">
   <a href="https://pypi.org/project/windhover/"><img src="https://img.shields.io/pypi/v/windhover" alt="PyPI"></a>
   <a href="https://github.com/justfeltlikerunning/windhover/actions/workflows/ci.yml"><img src="https://github.com/justfeltlikerunning/windhover/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <img src="https://img.shields.io/badge/license-MIT-8E2434" alt="MIT">
+  <img src="https://img.shields.io/badge/license-MIT-0F766E" alt="MIT">
+  <a href="https://buymeacoffee.com/justfeltlikerunning"><img src="https://img.shields.io/badge/☕-buy%20me%20a%20coffee-0F766E" alt="Buy me a coffee"></a>
 </p>
 
 > *Windhover* — the old poetic name for the kestrel, the falcon that hangs motionless
@@ -100,6 +101,11 @@ graph.invoke(input, config={
 - **Dashboards** — runs/tokens per day, per-model usage and latency, per-node latency, error rate.
 - **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
   scopes all views (runs, sessions, stats included — metrics never mix graphs).
+- **Artifacts** — when a node's output records a file path (a report it wrote, a chart,
+  an export), the run drawer lists it: HTML/PDF/images/text/CSV/code preview inline
+  (HTML sandboxed, scripts off), Word/Excel download with one click. Only paths recorded
+  by that run's own outputs are servable — never arbitrary files — behind the same
+  `/api` token gate.
 - **Fleet view** — with multiple graphs, a cross-graph overview becomes the landing page:
   a **Needs attention** list of every run paused on an interrupt (question shown inline,
   **resume right from the row**) or still running, plus per-graph health cards (last run,

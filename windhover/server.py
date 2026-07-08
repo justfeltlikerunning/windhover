@@ -7,7 +7,7 @@ changes and pushes it to the UI (the "living graph"). Runs use the imported grap
 (restart to run new code); the *view* always reflects current-on-disk topology.
 """
 from __future__ import annotations
-import sys, json, time, hashlib, threading, queue, subprocess, importlib, traceback
+import os, sys, json, time, hashlib, threading, queue, subprocess, importlib, traceback
 import uuid as uuid_mod
 from pathlib import Path
 from fastapi import FastAPI, Request
@@ -17,7 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import Config
 from .store import Store
 from .tracer import SpanBuilder, db_sink, apply_to_store, _trunc
-from . import push
+from . import artifacts, push
 
 cfg = Config.from_env()
 store = Store(cfg.db_path)
@@ -724,6 +724,31 @@ def api_overview(days: int = 7):
     """Fleet view: per-graph health + runs awaiting a human, across ALL graphs."""
     return JSONResponse(store.overview(days=max(1, min(days, 90)),
                                        serving=tuple(GRAPHS.keys())))
+
+
+@app.get("/api/runs/{run_id}/artifacts")
+def api_artifacts(run_id: str):
+    """Files this run's code recorded in its outputs (reports, charts, exports)."""
+    run = store.run_detail(run_id)
+    if not run:
+        return JSONResponse({"error": "unknown run"}, 404)
+    return JSONResponse({"artifacts": artifacts.run_artifacts(run)})
+
+
+@app.get("/api/runs/{run_id}/artifact")
+def api_artifact(run_id: str, path: str):
+    """Serve one artifact — only paths recorded by THIS run are resolvable."""
+    run = store.run_detail(run_id)
+    if not run:
+        return JSONResponse({"error": "unknown run"}, 404)
+    real = artifacts.resolve(run, path)
+    if not real:
+        return JSONResponse({"error": "not an artifact of this run (or missing on this host)"}, 404)
+    info = artifacts.classify(path)
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if not info["inline"]:
+        headers["Content-Disposition"] = f'attachment; filename="{os.path.basename(real)}"'
+    return FileResponse(real, media_type=info["mime"], headers=headers)
 
 
 @app.get("/api/events")
