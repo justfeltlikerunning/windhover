@@ -587,6 +587,31 @@ def test_env_multi_graph_parsing():
     print("env multi-graph parsing OK")
 
 
+def test_graph_scoped_stats_and_sessions():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    now = int(time.time() * 1000)
+    for i, g in enumerate(("alpha", "alpha", "beta")):
+        rid = f"g{i}"
+        s.open_run({"id": rid, "graph": g, "session": f"sess-{g}", "started_ms": now - i})
+        s.add_span({"id": f"s{i}", "run_id": rid, "type": "node", "name": "shared_name",
+                    "seq": 0, "dur_ms": 100 * (i + 1)})
+        s.add_span({"id": f"l{i}", "run_id": rid, "type": "llm", "name": "m", "seq": 1,
+                    "model": f"model-{g}", "dur_ms": 5, "prompt_tokens": 10,
+                    "completion_tokens": 1})
+        s.close_run(rid, "done", now + 10)
+    st_a = s.stats(graph="alpha")
+    assert st_a["totals"]["runs"] == 2
+    assert st_a["per_node"][0]["n"] == 2            # only alpha's spans, not beta's
+    assert [m["model"] for m in st_a["models"]] == ["model-alpha"]
+    st_all = s.stats()
+    assert st_all["totals"]["runs"] == 3 and st_all["per_node"][0]["n"] == 3
+    ses_b = s.sessions(graph="beta")
+    assert [x["session"] for x in ses_b] == ["sess-beta"]
+    assert len(s.sessions()) == 2
+    print("graph-scoped stats/sessions OK")
+
+
 def test_nonblocking_sink_and_webhook_hook():
     # sink to an unreachable host must return instantly and never raise
     from windhover.tracer import http_sink
@@ -633,5 +658,6 @@ if __name__ == "__main__":
     test_message_serialization()
     test_langgraph_json_discovery()
     test_env_multi_graph_parsing()
+    test_graph_scoped_stats_and_sessions()
     test_nonblocking_sink_and_webhook_hook()
     print("ALL SMOKE TESTS PASSED")

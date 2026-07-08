@@ -414,8 +414,8 @@ def api_runs(limit: int = 50, offset: int = 0, q: str = None, status: str = None
 
 
 @app.get("/api/sessions")
-def api_sessions(limit: int = 100):
-    return JSONResponse(store.sessions(limit=limit))
+def api_sessions(limit: int = 100, graph: str = None):
+    return JSONResponse(store.sessions(limit=limit, graph=graph or None))
 
 
 @app.get("/api/runs/{run_id}")
@@ -622,8 +622,8 @@ def api_dataset_run(ds_id: str, graph: str = None):
 
 
 @app.get("/api/stats")
-def api_stats(days: int = 30):
-    return JSONResponse(store.stats(days=max(1, min(days, 365))))
+def api_stats(days: int = 30, graph: str = None):
+    return JSONResponse(store.stats(days=max(1, min(days, 365)), graph=graph or None))
 
 
 @app.get("/api/events")

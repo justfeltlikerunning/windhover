@@ -526,7 +526,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       </div>
       <div id="view-stats" style="display:none">
         <div class="page">
-          <div class="page-head"><h1>Stats</h1><span class="sub">all recorded runs</span></div>
+          <div class="page-head"><h1>Stats</h1><span class="sub" id="stats-sub">all recorded runs</span></div>
           <div id="stats-body"></div>
         </div>
       </div>
@@ -642,14 +642,22 @@ async function loadGraphList(){
       sel.style.display=''; $('#gname').style.display='none';
       sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
       sel.onchange=()=>{ GSEL=sel.value; localStorage.setItem('wh-graph',GSEL);
-        loadGraph(true); probeMemory(); if(VIEW==='memory') loadMemory(); };
+        RF.graph=GSEL; const rg=$('#rgraph'); if(rg) rg.value=GSEL;
+        loadGraph(true); probeMemory();
+        if(VIEW==='memory') loadMemory();
+        if(VIEW==='runs') loadRuns();
+        if(VIEW==='sessions') loadSessions();
+        if(VIEW==='stats'){ loadStats(); loadDatasets(); } };
       const rg=$('#rgraph');
       if(rg){ rg.style.display='';
         rg.innerHTML='<option value="">All graphs</option>'+window.__graphList.map(g=>`<option>${esc(g)}</option>`).join('');
+        RF.graph=GSEL; rg.value=GSEL;
         rg.onchange=e=>{RF.graph=e.target.value;RF.offset=0;loadRuns();}; }
     }
   }catch(e){}
 }
+function multiGraph(){ return (window.__graphList||[]).length>1; }
+function gscope(){ return multiGraph()&&GSEL?'graph='+encodeURIComponent(GSEL):''; }
 function gparam(pfx){ return GSEL?pfx+'graph='+encodeURIComponent(GSEL):''; }
 function rgparam(){ const g=(window.__run||{}).graph||GSEL; return g?'graph='+encodeURIComponent(g):''; }
 let XRAY=false;
@@ -889,7 +897,7 @@ $('#rbook').onclick=()=>{RF.bookmarked=!RF.bookmarked;$('#rbook').classList.togg
 
 /* ---------- sessions ---------- */
 async function loadSessions(){
-  const ss=await(await fetch('/api/sessions')).json();
+  const ss=await(await fetch('/api/sessions?'+gscope())).json();
   $('#sess-sub').textContent=ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'';
   if(!ss.length){ $('#sess-wrap').innerHTML='<div class="empty"><div class="t">No sessions yet</div>Pass <span class="mono">session=</span> to <span class="mono">WindhoverTracer</span>, or <span class="mono">config={"metadata": {"windhover_session": …}}</span> in any LangChain/LangGraph app.</div>'; return; }
   $('#sess-wrap').innerHTML=`<div style="overflow:auto"><table>
@@ -1178,11 +1186,13 @@ function chartCard(title,daily,val,errKey){
     <div class="clabels"><span>${daily[0]?.day||''}</span><span>${daily[daily.length-1]?.day||''}</span></div></div></div>`;
 }
 async function loadStats(){
-  const s=await(await fetch('/api/stats?days=30')).json(); const t=s.totals||{};
+  const s=await(await fetch('/api/stats?days=30&'+gscope())).json(); const t=s.totals||{};
   const errRate=t.runs?Math.round((t.errors||0)/t.runs*100):0;
   const max=Math.max(1,...(s.per_node||[]).map(n=>n.avg_ms||0));
   const daily=s.daily||[], models=s.models||[];
   const db=t.db_bytes!=null?(t.db_bytes/1048576).toFixed(1)+' MB db':'';
+  const ssub=document.getElementById('stats-sub');
+  if(ssub) ssub.textContent=(multiGraph()&&GSEL)?('graph: '+GSEL):'all recorded runs';
   $('#stats-body').innerHTML=`
     <div class="metrics">
       <div class="metric"><div class="v num">${t.runs||0}</div><div class="l">Total runs</div></div>

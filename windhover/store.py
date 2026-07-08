@@ -310,14 +310,18 @@ class Store:
                     r["scores"] = sc.get(r["id"]) or None
         return {"runs": rows, "total": total, "limit": limit, "offset": offset}
 
-    def sessions(self, limit: int = 100) -> list[dict]:
+    def sessions(self, limit: int = 100, graph: Optional[str] = None) -> list[dict]:
+        cond, args = "", []
+        if graph:
+            cond = " AND graph=?"; args.append(graph)
         with _lock, self._conn() as c:
-            return [dict(r) for r in c.execute("""SELECT session,
+            return [dict(r) for r in c.execute(f"""SELECT session,
                 COUNT(*) runs, COUNT(*) FILTER (WHERE status='error') errors,
                 MIN(started_ms) first_ms, MAX(started_ms) last_ms,
                 SUM(total_tokens) tokens, SUM(cost_usd) cost, SUM(duration_ms) duration_ms
-                FROM runs WHERE session IS NOT NULL AND session!=''
-                GROUP BY session ORDER BY last_ms DESC LIMIT ?""", (limit,)).fetchall()]
+                FROM runs WHERE session IS NOT NULL AND session!=''{cond}
+                GROUP BY session ORDER BY last_ms DESC LIMIT ?""",
+                (*args, limit)).fetchall()]
 
     def run_detail(self, run_id: str) -> Optional[dict]:
         with _lock, self._conn() as c:
@@ -366,27 +370,36 @@ class Store:
                     s[f] = json.loads(s[f]) if s.get(f) else None
         return {"name": name, "summary": dict(agg), "recent": rows}
 
-    def stats(self, days: int = 30) -> dict:
+    def stats(self, days: int = 30, graph: Optional[str] = None) -> dict:
         cutoff = int((time.time() - days * 86400) * 1000)
+        rcond, rargs = ("", [])
+        scond, sargs = ("", [])
+        if graph:
+            rcond = " WHERE graph=?"; rargs = [graph]
+            scond = " AND runs.graph=?"; sargs = [graph]
         with _lock, self._conn() as c:
-            tot = c.execute("""SELECT COUNT(*) runs,
+            tot = c.execute(f"""SELECT COUNT(*) runs,
                 COUNT(*) FILTER (WHERE status='error') errors,
                 SUM(total_tokens) tokens, SUM(cost_usd) cost,
-                SUM(llm_calls) llm_calls FROM runs""").fetchone()
-            per_node = c.execute("""SELECT name, COUNT(*) n, AVG(dur_ms) avg_ms,
-                SUM(cost_usd) cost FROM spans WHERE type='node'
-                GROUP BY name ORDER BY avg_ms DESC LIMIT 20""").fetchall()
-            models = c.execute("""SELECT model, COUNT(*) calls,
-                SUM(prompt_tokens) prompt_tokens, SUM(completion_tokens) completion_tokens,
-                SUM(cost_usd) cost, AVG(dur_ms) avg_ms
-                FROM spans WHERE type='llm' AND model IS NOT NULL
-                GROUP BY model ORDER BY calls DESC LIMIT 20""").fetchall()
-            daily = c.execute("""SELECT
+                SUM(llm_calls) llm_calls FROM runs{rcond}""", rargs).fetchone()
+            per_node = c.execute(f"""SELECT spans.name, COUNT(*) n,
+                AVG(spans.dur_ms) avg_ms, SUM(spans.cost_usd) cost
+                FROM spans JOIN runs ON runs.id = spans.run_id
+                WHERE spans.type='node'{scond}
+                GROUP BY spans.name ORDER BY avg_ms DESC LIMIT 20""", sargs).fetchall()
+            models = c.execute(f"""SELECT spans.model, COUNT(*) calls,
+                SUM(spans.prompt_tokens) prompt_tokens,
+                SUM(spans.completion_tokens) completion_tokens,
+                SUM(spans.cost_usd) cost, AVG(spans.dur_ms) avg_ms
+                FROM spans JOIN runs ON runs.id = spans.run_id
+                WHERE spans.type='llm' AND spans.model IS NOT NULL{scond}
+                GROUP BY spans.model ORDER BY calls DESC LIMIT 20""", sargs).fetchall()
+            daily = c.execute(f"""SELECT
                 strftime('%Y-%m-%d', started_ms/1000, 'unixepoch') day,
                 COUNT(*) runs, COUNT(*) FILTER (WHERE status='error') errors,
                 SUM(total_tokens) tokens, SUM(cost_usd) cost
-                FROM runs WHERE started_ms >= ?
-                GROUP BY day ORDER BY day""", (cutoff,)).fetchall()
+                FROM runs WHERE started_ms >= ?{' AND graph=?' if graph else ''}
+                GROUP BY day ORDER BY day""", (cutoff, *rargs)).fetchall()
         try:
             db_bytes = os.path.getsize(self.path)
         except OSError:
@@ -395,4 +408,4 @@ class Store:
                 "per_node": [dict(r) for r in per_node],
                 "models": [dict(r) for r in models],
                 "daily": [dict(r) for r in daily],
-                "days": days}
+                "days": days, "graph": graph}

@@ -60,9 +60,10 @@ Projects with a **`langgraph.json`** (the LangGraph Studio/CLI convention) need 
 run `windhover` in the project directory and every graph the file defines is served.
 
 **Multiple graphs**: `WINDHOVER_GRAPH="checkout=app.flows:checkout,support=app.flows:support"`
-puts a graph selector in the top bar. The selector scopes the canvas, New run, node source,
-and Memory; the Runs page gets an extra graph filter; human-in-the-loop actions always follow
-the graph the run belongs to.
+puts a graph selector in the top bar. The selector scopes **everything** — canvas, New run,
+node source, Memory, Runs, Sessions, Stats (so per-node latency and model usage never mix
+graphs). The Runs page keeps an "All graphs" override in its own filter; human-in-the-loop
+actions always follow the graph the run belongs to.
 
 - The canvas always reflects **current-on-disk** topology (a subprocess re-extracts on
   file change). Runs, however, execute the graph **imported at startup** — restart the
