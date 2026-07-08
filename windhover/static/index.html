@@ -1324,6 +1324,24 @@ window.addEventListener('hashchange',()=>{
   const h=location.hash.slice(1);
   if(h.startsWith('run=')){ switchView('runs'); openRun(h.slice(4)); }
 });
+/* …and the sw also messages us directly (most reliable path on iOS) */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.addEventListener('message',(e)=>{
+    const d=e.data||{};
+    if(d.type!=='open-url'||!d.url) return;
+    const u=new URL(d.url,location.origin);
+    const run=u.hash.startsWith('#run=')?u.hash.slice(5):new URLSearchParams(u.search).get('run');
+    if(run){ history.replaceState(null,'','#run='+run); switchView('runs'); openRun(run); }
+  });
+  /* cold start: iOS launches a closed PWA at start_url and drops the notification
+     URL — ask the sw whether a notification tap is what launched us */
+  if(!location.hash.startsWith('#run=')){
+    navigator.serviceWorker.ready.then(()=>{
+      const c=navigator.serviceWorker.controller;
+      if(c) c.postMessage({type:'get-pending-nav'});
+    });
+  }
+}
 </script>
 <script>
 /* Web Push opt-in. Button reveals only when the server has VAPID configured. */
