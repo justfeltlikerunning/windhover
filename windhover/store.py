@@ -363,6 +363,11 @@ class Store:
             counts = c.execute("""SELECT COALESCE(graph,'') g, status, COUNT(*) n
                 FROM runs WHERE started_ms > ? GROUP BY g, status""",
                 (cutoff,)).fetchall()
+            daily = c.execute("""SELECT COALESCE(graph,'') g,
+                CAST(started_ms/86400000 AS INTEGER) day, COUNT(*) n,
+                COUNT(*) FILTER (WHERE status='error') e
+                FROM runs WHERE started_ms > ? GROUP BY g, day""",
+                (cutoff,)).fetchall()
             all_graphs = [r[0] for r in c.execute(
                 "SELECT DISTINCT COALESCE(graph,'') FROM runs").fetchall()]
             try:
@@ -419,13 +424,22 @@ class Store:
                 d["interrupt_summary"] = str(d["interrupt_summary"])[:200]
             att.append(d)
 
+        today = int(now_ms / 86400000)
+        days_axis = list(range(today - days + 1, today + 1))
         by_graph: dict[str, dict] = {}
         names = list(dict.fromkeys([*serving, *all_graphs]))
         for g in names:
             by_graph[g] = {"name": g, "serving": g in serving,
                            "runs_7d": 0, "errors_7d": 0,
                            "interrupted_now": 0, "running_now": 0,
-                           "recent": [], "last_run": None}
+                           "recent": [], "last_run": None,
+                           "daily": [{"runs": 0, "errors": 0} for _ in days_axis]}
+        for r in daily:
+            g = by_graph.get(r["g"])
+            if g is None or r["day"] not in days_axis:
+                continue
+            slot = g["daily"][days_axis.index(r["day"])]
+            slot["runs"] = r["n"]; slot["errors"] = r["e"]
         for r in counts:
             g = by_graph.get(r["g"])
             if g is None:

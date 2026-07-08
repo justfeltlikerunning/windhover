@@ -482,6 +482,12 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
 .fid{color:var(--text2);font-size:11.5px}
 .fgraph{color:var(--accent-text);font-weight:600;font-size:12px}
 .fago{margin-left:auto;color:var(--muted);font:11px var(--mono);white-space:nowrap}
+.fresume{display:flex;gap:6px;align-items:center;flex:1 1 100%;margin-top:2px}
+.fresume input{flex:1;min-width:140px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  padding:7px 10px;font-size:12.5px;color:var(--text)}
+.fresume .btn{padding:7px 14px;font-size:12.5px}
+.fsparkwrap{margin-left:auto;display:inline-flex;align-items:flex-end}
+.fspark{display:block}
 @media (max-width:600px){.fgrid{grid-template-columns:1fr}}
 
 #ptr{position:fixed;top:calc(env(safe-area-inset-top) + 64px);left:50%;transform:translate(-50%,-16px);
@@ -1352,6 +1358,28 @@ function _fleetSelect(graph){
 }
 function fleetOpen(graph,id){ _fleetSelect(graph); if(id) openRun(id); }
 function fleetGraph(graph){ _fleetSelect(graph); switchView('graph'); }
+window.fleetResume=async(graph,tid,rid)=>{
+  const el=document.getElementById('fr-'+rid);
+  const raw=el?el.value.trim():'';
+  const body={}; const v=parseMaybeJSON(raw); if(v!==undefined) body.value=v;
+  toast('Resuming thread '+tid.slice(0,8)+'…');
+  const gq=graph?'graph='+encodeURIComponent(graph):'';
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+gq,
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
+  await consumeRunStream(res);
+  loadFleet(true);
+};
+function _spark(daily){
+  const w=8, gap=3, h=20, max=Math.max(1,...daily.map(d=>d.runs));
+  const bars=daily.map((d,i)=>{
+    const bh=d.runs?Math.max(2,Math.round(d.runs/max*h)):1;
+    const eh=d.errors?Math.max(2,Math.round(d.errors/max*h)):0;
+    return `<rect x="${i*(w+gap)}" y="${h-bh}" width="${w}" height="${bh}" rx="1.5" fill="${d.runs?'var(--accent)':'var(--border)'}" opacity="${d.runs?'.75':'1'}"/>`+
+      (eh?`<rect x="${i*(w+gap)}" y="${h-eh}" width="${w}" height="${eh}" rx="1.5" fill="var(--err)"/>`:'');
+  }).join('');
+  return `<svg class="fspark" width="${daily.length*(w+gap)-gap}" height="${h}" aria-label="runs per day">${bars}</svg>`;
+}
 function _fRun(r){
   return `<div class="frun" onclick="fleetOpen('${esc(r.graph||'')}','${r.id}')">
     <span class="status ${r.status}"><span class="d"></span>${r.status}</span>
@@ -1372,7 +1400,10 @@ async function loadFleet(quiet){
       <span class="mono fgraph">${esc(a.graph||'—')}</span>
       <span class="mono fid">${a.id.slice(0,8)}</span>
       ${a.interrupt_summary?`<span class="fq">${esc(a.interrupt_summary)}</span>`:''}
-      <span class="fago">${a.status==='interrupted'?'waiting ':''}${ago(a.started_ms)}</span></div>`).join('');
+      <span class="fago">${a.status==='interrupted'?'waiting ':''}${ago(a.started_ms)}</span>
+      ${a.status==='interrupted'&&a.thread_id?`<span class="fresume" onclick="event.stopPropagation()">
+        <input id="fr-${a.id}" placeholder="resume value (blank = continue)">
+        <button class="btn primary" onclick="fleetResume('${esc(a.graph||'')}','${esc(a.thread_id)}','${a.id}')">Resume</button></span>`:''}</div>`).join('');
   }
   html+=`<div class="fgrid">`+graphs.map(g=>`
     <div class="card fcard">
@@ -1386,6 +1417,7 @@ async function loadFleet(quiet){
         <span><b class="num">${g.runs_7d}</b> runs · 7d</span>
         <span class="${g.errors_7d?'ferr':''}"><b class="num">${g.errors_7d}</b> errors · 7d</span>
         ${g.last_run?`<span>last ${ago(g.last_run.started_ms)}</span>`:'<span>no runs yet</span>'}
+        ${g.daily?`<span class="fsparkwrap" title="runs per day, errors in red">${_spark(g.daily)}</span>`:''}
       </div>
       ${(g.recent||[]).map(_fRun).join('')||'<div class="empty" style="padding:14px">No runs recorded.</div>'}
     </div>`).join('')+`</div>`;

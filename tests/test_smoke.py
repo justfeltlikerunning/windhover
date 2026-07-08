@@ -762,6 +762,12 @@ def test_overview_fleet():
     # resumed interrupt is handled — excluded from attention and rollups
     assert "d-old-wait" not in [a["id"] for a in ov["attention"]]
     assert by["delta"]["interrupted_now"] == 0
+    # daily sparkline buckets: one slot per day in the window, sums match counts
+    for g in ov["graphs"]:
+        assert len(g["daily"]) == 7
+    assert sum(d["runs"] for d in by["alpha"]["daily"]) == 5
+    assert sum(d["errors"] for d in by["beta"]["daily"]) == 1
+    assert sum(d["runs"] for d in by["gamma"]["daily"]) == 0   # old run outside window
     assert by["beta"]["errors_7d"] == 1
     assert by["gamma"]["runs_7d"] == 0          # old run outside window
     # attention: newest first, both statuses, question surfaced, waiting clock

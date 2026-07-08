@@ -101,10 +101,11 @@ graph.invoke(input, config={
 - **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
   scopes all views (runs, sessions, stats included — metrics never mix graphs).
 - **Fleet view** — with multiple graphs, a cross-graph overview becomes the landing page:
-  a **Needs attention** list of every run paused on an interrupt (with the question shown)
-  or still running, plus per-graph health cards (last run, 7-day run/error counts, recent
-  runs). Interrupts that were already resumed on their thread don't linger as false
-  positives. Also available as `GET /api/overview`.
+  a **Needs attention** list of every run paused on an interrupt (question shown inline,
+  **resume right from the row**) or still running, plus per-graph health cards (last run,
+  7-day run/error counts with a daily sparkline — errors in red — and recent runs).
+  Interrupts that were already resumed on their thread don't linger as false positives.
+  Also available as `GET /api/overview`.
 - **Alerts** — `WINDHOVER_WEBHOOK` posts a JSON summary when a run errors or pauses; set
   VAPID keys and installed browsers can also subscribe to **Web Push** notifications (a 🔔 in
   the top bar; works as an installed PWA, iOS 16.4+ included).
