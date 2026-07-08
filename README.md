@@ -120,6 +120,13 @@ curl -X POST :8090/api/runs/RUN_ID/scores -H 'Content-Type: application/json' \
 `/api` routes; the UI prompts once and remembers it).
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
 
+## Docs
+**[The guide](docs/GUIDE.md)** covers every feature with how-tos and the fine print —
+including the most important nuance: *panels light up based on what your graph supports*
+(Memory needs a `store=`, time-travel/HITL need a `checkpointer=`, X-ray needs subgraphs,
+live typing needs `streaming=True`). An absent tab isn't a bug — it's a graph without that
+capability. [SPEC.md](SPEC.md) has the architecture.
+
 ## Notes
 Runs use the imported graph (restart to run new code); the *view* always reflects
 current-on-disk topology. All frontend assets are vendored — no CDN, works fully offline.
