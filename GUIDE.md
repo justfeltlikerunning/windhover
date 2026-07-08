@@ -22,6 +22,9 @@ An "absent" tab is not a bug — it means the graph doesn't carry that capabilit
 | Edge labels on the canvas        | conditional edges whose branch names differ from their targets |
 | Node metadata in the node pane   | `add_node("x", fn, metadata={…})`                            |
 | Runtime-context box on New run   | a graph compiled with a `context_schema`                     |
+| **Fleet** view (cross-graph)     | more than one graph served (hidden in single-graph mode)     |
+| **Artifacts** on runs/nodes      | node outputs that record absolute file paths (see how-to)    |
+| 🔔 alerts button / Web Push      | `WINDHOVER_VAPID_PUBLIC`/`_PRIVATE` set, served over HTTPS   |
 
 Minimal fully-featured compile:
 
@@ -57,7 +60,7 @@ WINDHOVER_GRAPH="myapp.graphs:graph" WINDHOVER_GRAPH_DIR=/path/to/app windhover
 ```
 
 Projects with a **`langgraph.json`** (the LangGraph Studio/CLI convention) need no flags —
-run `windhover` in the project directory and it uses the file's first graph.
+run `windhover` in the project directory and every graph the file defines is served.
 
 - The canvas always reflects **current-on-disk** topology (a subprocess re-extracts on
   file change). Runs, however, execute the graph **imported at startup** — restart the
@@ -132,6 +135,72 @@ The Memory tab lists namespaces and their items with search. **It populates only
 your nodes actually write to the store** — an empty tab on a fresh graph is expected.
 Windhover is read-only here: it browses, it never writes or deletes memories.
 
+## How-to: artifacts — preview and download files your graph writes
+
+There is no artifact API to call. The contract is simply: **return the file's
+absolute path in the node's output state**, and Windhover surfaces it.
+
+```python
+def report(state):
+    path = write_report(state)              # "/srv/out/report_2026-07-08.docx"
+    return {"docs": [path]}                 # any key, any nesting — this is enough
+```
+
+- The run drawer grows an **artifacts** section (all files across the run) and each
+  node execution in the node pane shows chips under its payload.
+- **Inline preview**: HTML (sandboxed iframe — scripts never execute), PDF, images/SVG,
+  Python (highlighted), CSV/TSV (as a table), JSON/markdown/text. **Download-only**:
+  Word/Excel/zip — browsers can't render those; Windhover doesn't pretend otherwise.
+- Rules: absolute paths (`/…`, `~/…`, or `C:\…`) with a recognized extension. Relative
+  paths and URLs are deliberately ignored so ordinary strings never false-positive.
+- **Locality**: the file must exist on the Windhover server's host. Runs traced in from
+  another machine list their files flagged `missing here` instead of erroring.
+- **Security**: the server only serves paths recorded in that run's own stored outputs —
+  the allowlist is re-derived from the run on every request, so it can never read
+  arbitrary files — and it sits behind the same `/api` token gate.
+
+## How-to: the Fleet view (multiple graphs, one glance)
+
+Serving more than one graph makes **Fleet** the landing page (single-graph
+instances never see it):
+
+- **Needs attention** — every run across all graphs that's paused on an interrupt
+  (its question inline, a resume box right on the row — blank continues past a
+  breakpoint) or still running. An interrupted run whose thread already has a newer
+  run counts as *handled* and drops off — resumes create new runs, so the queue
+  never accumulates stale entries.
+- **Per-graph cards** — last-run status, 7-day run/error counts with a daily
+  sparkline (errors in red), and the three most recent runs. Cards for graphs that
+  only ingested traces (or were renamed) are flagged `not serving` — clicking one
+  opens their run history, since there's no live topology to show.
+- The top-bar graph selector hides here (Fleet is cross-graph by definition) and
+  returns on scoped views. Deep link: `#fleet`. Script access: `GET /api/overview`.
+
+## How-to: phone alerts (Web Push)
+
+Windhover can push run alerts to any installed PWA — iOS 16.4+, Android, desktop.
+
+```bash
+pip install windhover[push]
+python -c "from py_vapid import Vapid01; v=Vapid01(); v.generate_keys(); \
+           print(v.private_pem().decode())"          # or any VAPID keygen
+export WINDHOVER_VAPID_PUBLIC=…  WINDHOVER_VAPID_PRIVATE=…
+export WINDHOVER_VAPID_SUBJECT=mailto:you@yourdomain.com
+```
+
+- **HTTPS is mandatory** — browsers only allow push from a secure origin, and Apple
+  rejects VAPID contacts on fake domains (`.local` → 403). A reverse proxy with a
+  real certificate (Caddy, Tailscale `serve`, etc.) in front of Windhover is enough.
+- On the device: open the HTTPS URL → add to home screen → open the installed app →
+  tap the **🔔** (iOS requires the tap to come from an installed PWA). A test push
+  confirms delivery. The bell is stateful: filled = on, slashed = blocked in OS settings.
+- Alerts fire on **error** and **interrupted** runs — the same events as
+  `WINDHOVER_WEBHOOK`. Tapping one deep-links to the run (or to the Fleet queue when
+  several runs are awaiting approval). Expired subscriptions are pruned automatically.
+- `WINDHOVER_DIGEST=07:30` adds one daily summary push (runs/errors/awaiting across
+  all graphs). Quiet days send nothing.
+- Webhooks can route per graph: `WINDHOVER_WEBHOOK="https://hooks.example/default,billing=https://hooks.example/billing"`.
+
 ## How-to: datasets & batch eval
 
 ```bash
@@ -190,7 +259,9 @@ for semantic grading, run your own judge and `POST /api/runs/{id}/scores`.
   it contains no data.
 - **Retention**: `WINDHOVER_RETENTION_DAYS=30` prunes old runs on startup and every 6h.
   Default keeps everything.
-- **Deep links**: `#runs`, `#sessions`, `#stats`, `#run=<id>`.
+- **Deep links**: `#fleet`, `#runs`, `#sessions`, `#stats`, `#run=<id>`.
+- **Mobile**: pull down on any list view to refresh (the graph view pans instead);
+  returning the PWA to the foreground refetches the current view automatically.
 
 ## Try it all on the demo graph
 

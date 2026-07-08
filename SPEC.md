@@ -1,4 +1,4 @@
-# Windhover — engineering spec (current as of v0.14)
+# Windhover — engineering spec (current as of v0.19)
 
 Self-hosted LangGraph/LangChain observability + human-in-the-loop console.
 Code is the only source of truth; Windhover observes and, for HITL, drives the
@@ -51,9 +51,32 @@ breakpoints, update_state, checkpoint forking). No visual editing, ever.
   runs synthesize the node span with `params.cached`.
 - **Auth**: optional `WINDHOVER_TOKEN` Bearer/?token= gate on `/api` only.
 - **Alerts**: `WINDHOVER_WEBHOOK` POSTs a summary on error/interrupted runs
-  (store.on_run_closed hook, fire-and-forget, deduped).
+  (store.on_run_closed hook, fire-and-forget, deduped). Accepts a default URL
+  plus per-graph `name=url` overrides ('=' only counts before '://').
+- **Web Push** (`windhover.push`, optional `pip install windhover[push]`):
+  VAPID keys enable it (`WINDHOVER_VAPID_*`); subscriptions live in the store;
+  delivery is a daemon-thread fan-out that prunes 404/410. Interrupt pushes
+  route to `#fleet` when >1 run awaits (`store.awaiting_count()`), else deep-link
+  the run. `WINDHOVER_DIGEST=HH:MM` sends one daily summary (pure builder
+  `digest_summary`; quiet days skip). Service worker (`/sw.js`): cold-start
+  taps survive iOS dropping the notification URL via a Cache-API pending-nav
+  handshake (sw stores target at click; page asks on boot; warm taps go over
+  postMessage). PWA install icons are PNG (`apple-touch-icon` + manifest
+  192/512) — iOS ignores SVG there.
+- **Fleet** (`store.overview()`): one call, grouped queries (7-day counts,
+  recent-N per graph via window function with a pre-3.25 fallback, daily
+  buckets for sparklines, attention list). An interrupted run whose thread has
+  a newer run was resumed → excluded (`NOT EXISTS`), so "awaiting" never goes
+  stale. Serving registry ∪ stored graph names — ingest-only graphs appear
+  flagged not-serving.
+- **Artifacts** (`windhover.artifacts`): file paths detected in a run's
+  recorded input/span outputs (absolute/`~`/drive + known extension only).
+  Serving re-derives the allowlist from the stored run on every request —
+  unrecorded paths 404; never arbitrary reads. Inline kinds (html sandboxed,
+  pdf, images, text/csv/py) vs download-only (office formats), nosniff,
+  attachment disposition for downloads.
 
-## Data model (schema v7)
+## Data model (schema v8)
 `runs`: id · graph · source(ui|ingest) · status(running|done|error|interrupted) ·
 session · tags(json) · thread_id · input(json) · error · timing · aggregates
 (node_count, llm_calls, tokens, cost_usd) · bookmarked.
@@ -63,13 +86,16 @@ timing/offset/dur · input/output(json) · model · tokens · cost_usd · error
 (full traceback) · retries · ttft_ms · usage_detail(json) · params(json).
 `scores`: id · run_id · name · value · comment · source.
 `datasets`: id · name · items(json).
+`push_subscriptions`: endpoint(pk) · p256dh · auth · label.
 
 ## API surface
 Observe: `/api/graph` `/api/schema` `/api/runs[…filters]` `/api/runs/{id}`
-`/api/nodes/{name}[/source]` `/api/sessions` `/api/stats` `/api/export`
-`/api/memory/namespaces` `/api/memory/items` `/api/events` (SSE).
+`/api/runs/{id}/artifacts` `/api/runs/{id}/artifact?path=` (per-run allowlist)
+`/api/nodes/{name}[/source]` `/api/sessions` `/api/stats` `/api/overview`
+`/api/export` `/api/memory/namespaces` `/api/memory/items` `/api/events` (SSE).
 Act: `/api/run` (SSE; `_session/_tags/_thread/_interrupt_before/_interrupt_after/
-_configurable`), `/api/ingest`, `PATCH /api/runs/{id}`, scores CRUD, datasets
-CRUD + `/run`, `/api/threads/{id}/history|resume|state`.
+_configurable/_graph`), `/api/ingest`, `PATCH /api/runs/{id}`, scores CRUD,
+datasets CRUD + `/run`, `/api/threads/{id}/history|resume|state`,
+`/api/push/config|subscribe|unsubscribe|test`, `/sw.js`, `/manifest.json`.
 
 User-facing behavior, nuances, and how-tos: see `docs/GUIDE.md`.
