@@ -909,7 +909,9 @@ function switchView(v){ VIEW=v;
   if(v==='fleet')loadFleet();
   clearInterval(window.__fleetT);
   if(v==='fleet') window.__fleetT=setInterval(()=>{ if(!document.hidden) loadFleet(true); },15000);
-  if(cy&&v==='graph')setTimeout(()=>cy.resize(),40);
+  // the canvas was often sized while hidden (fleet is the landing view) —
+  // re-measure AND re-fit every time the graph tab is entered
+  if(cy&&v==='graph')setTimeout(()=>{cy.resize();cy.fit(undefined,50);},60);
 }
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
 
