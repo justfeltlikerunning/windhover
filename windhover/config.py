@@ -1,4 +1,9 @@
-"""Windhover configuration — one place, read from the environment."""
+"""Windhover configuration — one place, read from the environment.
+
+Multi-graph: WINDHOVER_GRAPH accepts a comma-separated list of graphs, each
+"module:attr" or "name=module:attr". With no env set, ALL graphs from a
+langgraph.json (the LangGraph Studio/CLI project file) are served.
+"""
 from __future__ import annotations
 import os
 from dataclasses import dataclass
@@ -9,48 +14,69 @@ PKG_DIR = Path(__file__).resolve().parent
 
 @dataclass(frozen=True)
 class Config:
-    graph_ref: str            # "module:attr" of a compiled graph ("" = ingest-only)
-    graph_dir: str            # import path for the graph module
+    graphs: tuple           # ((name, "module:attr"), …); () = ingest-only
+    graph_dir: str          # import path for the graph modules
     db_path: str
     host: str
     port: int
-    watch: bool               # live-topology file watcher
+    watch: bool             # live-topology file watcher
     pricing_path: str
-    retention_days: int       # 0 = keep runs forever
-    token: str                # WINDHOVER_TOKEN: require Bearer/query token on /api ("" = open)
-    webhook: str              # WINDHOVER_WEBHOOK: POST run summaries on error/interrupted ("" = off)
+    retention_days: int     # 0 = keep runs forever
+    token: str              # WINDHOVER_TOKEN: require Bearer/query token on /api ("" = open)
+    webhook: str            # WINDHOVER_WEBHOOK: POST run summaries on error/interrupted ("" = off)
+
+    @property
+    def graph_ref(self) -> str:
+        """First graph's ref — kept for single-graph callers/back-compat."""
+        return self.graphs[0][1] if self.graphs else ""
 
     @staticmethod
-    def _discover() -> tuple[str, str]:
-        """No WINDHOVER_GRAPH? Look for a langgraph.json (LangGraph's standard
-        project file) in WINDHOVER_GRAPH_DIR / cwd and use its first graph.
-        Returns (graph_ref, graph_dir) or ("", dir)."""
+    def _parse_env_graphs(raw: str) -> tuple:
+        out = []
+        for part in raw.split(","):
+            part = part.strip()
+            if not part:
+                continue
+            if "=" in part.split(":")[0]:          # "name=module:attr"
+                name, _, ref = part.partition("=")
+                out.append((name.strip(), ref.strip()))
+            else:
+                out.append((part, part))            # name defaults to the ref
+        return tuple(out)
+
+    @staticmethod
+    def _discover() -> tuple:
+        """No WINDHOVER_GRAPH? Serve every graph a langgraph.json defines.
+        Returns ((name, ref), …), graph_dir."""
         import json as _json
         base = os.environ.get("WINDHOVER_GRAPH_DIR", os.getcwd())
-        cfg_path = os.path.join(base, "langgraph.json")
         try:
-            graphs = _json.loads(open(cfg_path).read()).get("graphs") or {}
-            for _name, ref in graphs.items():
-                path, _, attr = str(ref).partition(":")
-                if not attr:
-                    continue
-                if path.endswith(".py"):
-                    full = os.path.normpath(os.path.join(base, path))
-                    return (f"{os.path.splitext(os.path.basename(full))[0]}:{attr}",
-                            os.path.dirname(full))
-                return f"{path}:{attr}", base   # already module:attr
+            graphs = _json.loads(open(os.path.join(base, "langgraph.json")).read()).get("graphs") or {}
         except Exception:
-            pass
-        return "", base
+            return (), base
+        out, gdir = [], base
+        for name, ref in graphs.items():
+            path, _, attr = str(ref).partition(":")
+            if not attr:
+                continue
+            if path.endswith(".py"):
+                full = os.path.normpath(os.path.join(base, path))
+                gdir = os.path.dirname(full)        # langgraph convention: shared src dir
+                out.append((str(name), f"{os.path.splitext(os.path.basename(full))[0]}:{attr}"))
+            else:
+                out.append((str(name), f"{path}:{attr}"))
+        return tuple(out), gdir
 
     @classmethod
     def from_env(cls) -> "Config":
-        graph_ref = os.environ.get("WINDHOVER_GRAPH", "")
+        raw = os.environ.get("WINDHOVER_GRAPH", "")
         graph_dir = os.environ.get("WINDHOVER_GRAPH_DIR", os.getcwd())
-        if not graph_ref:
-            graph_ref, graph_dir = cls._discover()
+        if raw:
+            graphs = cls._parse_env_graphs(raw)
+        else:
+            graphs, graph_dir = cls._discover()
         return cls(
-            graph_ref=graph_ref,
+            graphs=graphs,
             graph_dir=graph_dir,
             db_path=os.environ.get("WINDHOVER_DB", str(PKG_DIR.parent / "windhover.db")),
             host=os.environ.get("WINDHOVER_HOST", "0.0.0.0"),

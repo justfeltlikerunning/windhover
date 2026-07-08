@@ -38,6 +38,9 @@ Edit the graph file while it runs and the canvas updates itself.
 
 Your own graph: `WINDHOVER_GRAPH="myapp.graphs:g" WINDHOVER_GRAPH_DIR=/path python -m windhover.server`
 
+Several graphs behind one URL: `WINDHOVER_GRAPH="checkout=app.flows:checkout,support=app.flows:support"`
+(a selector appears in the top bar; `langgraph.json` projects serve all their graphs automatically).
+
 ## Trace runs from any app
 ```python
 from windhover import WindhoverTracer

@@ -22,11 +22,26 @@ cfg = Config.from_env()
 store = Store(cfg.db_path)
 STATIC = Path(__file__).parent / "static"
 
-graph = None
-if cfg.graph_ref:
+GRAPHS: dict = {}          # name -> compiled graph
+if cfg.graphs:
     sys.path.insert(0, cfg.graph_dir)
-    _m, _a = cfg.graph_ref.split(":")
-    graph = getattr(importlib.import_module(_m), _a)
+    for _name, _ref in cfg.graphs:
+        try:
+            _m, _a = _ref.split(":")
+            GRAPHS[_name] = getattr(importlib.import_module(_m), _a)
+        except Exception as _e:
+            print(f"[windhover] failed to import graph {_name} ({_ref}): {_e}")
+
+
+def _default_name() -> str:
+    return next(iter(GRAPHS), "")
+
+
+def _graph_for(name=None):
+    """Resolve a graph by registry name; no name -> the first graph."""
+    if name:
+        return GRAPHS.get(name)
+    return next(iter(GRAPHS.values()), None)
 
 app = FastAPI(title="Windhover")
 
@@ -54,7 +69,8 @@ async def _auth_middleware(request: Request, call_next):
 
 # ---- topology manager (subprocess extraction, mtime-cached) ---------------
 class Topo:
-    def __init__(self):
+    def __init__(self, name: str, ref: str):
+        self.name, self.ref = name, ref
         self.lock = threading.Lock()
         self.sig = None
         self.data = {"topology": {"nodes": [], "edges": []}, "schema": {}, "sources": {}}
@@ -62,8 +78,6 @@ class Topo:
         self.version = 0
 
     def _signature(self) -> float:
-        if not cfg.graph_ref:
-            return 0.0
         try:
             return max((p.stat().st_mtime for p in Path(cfg.graph_dir).glob("*.py")),
                        default=0.0)
@@ -71,8 +85,6 @@ class Topo:
             return 0.0
 
     def refresh(self, force=False) -> None:
-        if not cfg.graph_ref:
-            return
         sig = self._signature()
         with self.lock:
             if not force and sig == self.sig:
@@ -80,7 +92,7 @@ class Topo:
             self.sig = sig
         try:
             out = subprocess.run(
-                [sys.executable, "-m", "windhover.extract", cfg.graph_ref, cfg.graph_dir],
+                [sys.executable, "-m", "windhover.extract", self.ref, cfg.graph_dir],
                 capture_output=True, text=True, timeout=20,
                 cwd=str(Path(__file__).parent.parent))
             data = json.loads(out.stdout)
@@ -95,7 +107,7 @@ class Topo:
 
     def get(self) -> dict:
         with self.lock:
-            return {**self.data["topology"], "graph": cfg.graph_ref, "hash": self.hash,
+            return {**self.data["topology"], "graph": self.name, "hash": self.hash,
                     "version": self.version, "xray": self.data.get("topology_xray")}
 
     def schema(self) -> dict:
@@ -107,20 +119,28 @@ class Topo:
             return self.data.get("sources", {})
 
 
-TOPO = Topo()
-TOPO.refresh(force=True)
+TOPOS: dict = {name: Topo(name, ref) for name, ref in cfg.graphs if name in GRAPHS}
+for _t in TOPOS.values():
+    _t.refresh(force=True)
+
+
+def _topo_for(name=None):
+    if name:
+        return TOPOS.get(name)
+    return next(iter(TOPOS.values()), None)
 
 
 def _watch_loop():
-    while cfg.watch and cfg.graph_ref:
+    while cfg.watch and TOPOS:
         time.sleep(2)
-        try:
-            TOPO.refresh()
-        except Exception:
-            pass
+        for tp in TOPOS.values():
+            try:
+                tp.refresh()
+            except Exception:
+                pass
 
 
-if cfg.watch and cfg.graph_ref:
+if cfg.watch and TOPOS:
     threading.Thread(target=_watch_loop, daemon=True).start()
 
 
@@ -149,13 +169,13 @@ def _fire_webhook(summary: dict) -> None:
             import urllib.request
             run = store.run_detail(summary["id"]) or summary
             body = {
-                "source": "windhover", "graph": run.get("graph") or cfg.graph_ref,
+                "source": "windhover", "graph": run.get("graph") or _default_name(),
                 "run_id": summary["id"], "status": summary["status"],
                 "duration_ms": summary.get("duration_ms"),
                 "session": run.get("session"), "thread_id": run.get("thread_id"),
                 "error": (str(summary.get("error") or "").strip().splitlines() or [None])[-1],
                 "text": f"[windhover] run {summary['id']} {summary['status']}"
-                        f" ({run.get('graph') or cfg.graph_ref})",
+                        f" ({run.get('graph') or _default_name()})",
             }
             req = urllib.request.Request(
                 cfg.webhook, data=json.dumps(body).encode(),
@@ -179,16 +199,29 @@ def _template(schema: dict) -> dict:
 
 
 # ---- endpoints ------------------------------------------------------------
+@app.get("/api/graphs")
+def api_graphs():
+    return JSONResponse({"graphs": list(GRAPHS.keys()), "default": _default_name()})
+
+
 @app.get("/api/graph")
-def api_graph():
-    return JSONResponse(TOPO.get())
+def api_graph(graph: str = None):
+    tp = _topo_for(graph)
+    if tp is None:
+        return JSONResponse({"nodes": [], "edges": [], "graph": "", "hash": "",
+                             "version": 0, "xray": None})
+    return JSONResponse(tp.get())
 
 
 @app.get("/api/schema")
-def api_schema():
-    s = TOPO.schema()
-    with TOPO.lock:
-        ctx = TOPO.data.get("context_schema") or {}
+def api_schema(graph: str = None):
+    tp = _topo_for(graph)
+    if tp is None:
+        return JSONResponse({"schema": {}, "template": {},
+                             "context_schema": {}, "context_template": {}})
+    s = tp.schema()
+    with tp.lock:
+        ctx = tp.data.get("context_schema") or {}
     return JSONResponse({"schema": s, "template": _template(s),
                          "context_schema": ctx, "context_template": _template(ctx)})
 
@@ -197,7 +230,7 @@ def _sse(ev: str, data: dict) -> str:
     return f"event: {ev}\ndata: {json.dumps(data)}\n\n"
 
 
-def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
+def _stream_execution(gr, graph_input, config, tracer, stream_kwargs=None):
     """Shared SSE executor for /api/run and /api/threads/…/resume. Detects both
     dynamic interrupts (__interrupt__ updates) and static breakpoints (stream
     ends with pending next-nodes) and corrects the run status accordingly."""
@@ -208,7 +241,7 @@ def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
     def worker():
         try:
             interrupted = False
-            for mode, chunk in graph.stream(graph_input, config=config,
+            for mode, chunk in gr.stream(graph_input, config=config,
                                             stream_mode=["updates", "custom"],
                                             **(stream_kwargs or {})):
                 if mode == "custom":
@@ -238,9 +271,9 @@ def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
                                         "params": {"cached": True}})
                         seq_extra[0] += 1
                     q.put(("node", {"node": node, "cached": cached or None}))
-            if not interrupted and getattr(graph, "checkpointer", None) is not None:
+            if not interrupted and getattr(gr, "checkpointer", None) is not None:
                 try:  # static breakpoint: stream ended but nodes are pending
-                    st = graph.get_state(config)
+                    st = gr.get_state(config)
                     if st.next:
                         interrupted = True
                         q.put(("interrupt", {"run_id": run_id,
@@ -270,21 +303,24 @@ def _stream_execution(graph_input, config, tracer, stream_kwargs=None):
 
 @app.post("/api/run")
 async def api_run(request: Request):
-    if graph is None:
-        return JSONResponse({"error": "no local graph (WINDHOVER_GRAPH unset)"}, 400)
     try:
         payload = await request.json()
     except Exception:
         payload = {}
+    gname = payload.pop("_graph", None) or _default_name()
+    gr = _graph_for(gname)
+    if gr is None:
+        return JSONResponse({"error": "no local graph (WINDHOVER_GRAPH unset "
+                            "or unknown graph name)"}, 400)
     session = payload.pop("_session", None)
     tags = payload.pop("_tags", None)
     thread = payload.pop("_thread", None)
     pause_before = payload.pop("_interrupt_before", None)
     pause_after = payload.pop("_interrupt_after", None)
     extra_conf = payload.pop("_configurable", None)
-    tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref, session=session, tags=tags)
+    tracer = SpanBuilder(db_sink(store), run_name=gname, session=session, tags=tags)
     config = {"callbacks": [tracer]}
-    if thread or getattr(graph, "checkpointer", None) is not None:
+    if thread or getattr(gr, "checkpointer", None) is not None:
         # a checkpointed graph needs a thread; default to the run id so
         # time-travel works out of the box
         config["configurable"] = {"thread_id": thread or tracer.run_id}
@@ -295,15 +331,16 @@ async def api_run(request: Request):
         sk["interrupt_before"] = [str(n) for n in pause_before]
     if pause_after:
         sk["interrupt_after"] = [str(n) for n in pause_after]
-    return _stream_execution(payload, config, tracer, sk)
+    return _stream_execution(gr, payload, config, tracer, sk)
 
 
 @app.post("/api/threads/{thread_id}/resume")
-async def api_thread_resume(request: Request, thread_id: str):
+async def api_thread_resume(request: Request, thread_id: str, graph: str = None):
     """Human-in-the-loop: answer an interrupt (Command(resume=…)), redirect
     (Command(goto=…)), continue past a static breakpoint (no body), or fork
     from an earlier checkpoint (checkpoint_id)."""
-    if graph is None or getattr(graph, "checkpointer", None) is None:
+    gr = _graph_for(graph)
+    if gr is None or getattr(gr, "checkpointer", None) is None:
         return JSONResponse({"error": "no local graph with a checkpointer"}, 400)
     try:
         body = await request.json()
@@ -319,21 +356,22 @@ async def api_thread_resume(request: Request, thread_id: str):
         graph_input = Command(goto=str(body["goto"]), update=body.get("update"))
     else:
         graph_input = None  # plain continue (static breakpoint / after state edit)
-    tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref,
+    tracer = SpanBuilder(db_sink(store), run_name=graph or _default_name(),
                          session=body.get("_session"),
                          tags=(body.get("_tags") or []) + ["resume"])
     configurable = {"thread_id": thread_id}
     if body.get("checkpoint_id"):
         configurable["checkpoint_id"] = str(body["checkpoint_id"])
     config = {"callbacks": [tracer], "configurable": configurable}
-    return _stream_execution(graph_input, config, tracer)
+    return _stream_execution(gr, graph_input, config, tracer)
 
 
 @app.post("/api/threads/{thread_id}/state")
-async def api_thread_update_state(request: Request, thread_id: str):
+async def api_thread_update_state(request: Request, thread_id: str, graph: str = None):
     """Human-in-the-loop: edit state at the current (or a given) checkpoint —
     LangGraph's update_state. Follow with …/resume to continue on the edit."""
-    if graph is None or getattr(graph, "checkpointer", None) is None:
+    gr = _graph_for(graph)
+    if gr is None or getattr(gr, "checkpointer", None) is None:
         return JSONResponse({"error": "no local graph with a checkpointer"}, 400)
     body = await request.json()
     values = body.get("values")
@@ -343,8 +381,8 @@ async def api_thread_update_state(request: Request, thread_id: str):
     if body.get("checkpoint_id"):
         configurable["checkpoint_id"] = str(body["checkpoint_id"])
     try:
-        new_cfg = graph.update_state({"configurable": configurable}, values,
-                                     as_node=body.get("as_node"))
+        new_cfg = gr.update_state({"configurable": configurable}, values,
+                                  as_node=body.get("as_node"))
         return JSONResponse({"ok": True, "checkpoint_id":
                              (new_cfg.get("configurable") or {}).get("checkpoint_id")})
     except Exception as e:
@@ -445,8 +483,9 @@ def api_node(name: str, limit: int = 25):
 
 
 @app.get("/api/nodes/{name}/source")
-def api_node_source(name: str):
-    src = TOPO.sources().get(name)
+def api_node_source(name: str, graph: str = None):
+    tp = _topo_for(graph)
+    src = (tp.sources() if tp else {}).get(name)
     if src:
         return JSONResponse(src)
     return JSONResponse({"error": "no source available for this node "
@@ -454,14 +493,15 @@ def api_node_source(name: str):
 
 
 @app.get("/api/threads/{thread_id}/history")
-def api_thread_history(thread_id: str, limit: int = 80):
+def api_thread_history(thread_id: str, limit: int = 80, graph: str = None):
     """Time-travel: LangGraph checkpoint history for a thread (local graph
     with a checkpointer only)."""
-    if graph is None or getattr(graph, "checkpointer", None) is None:
+    gr = _graph_for(graph)
+    if gr is None or getattr(gr, "checkpointer", None) is None:
         return JSONResponse({"error": "no local graph with a checkpointer"}, 404)
     steps = []
     try:
-        for st in graph.get_state_history({"configurable": {"thread_id": thread_id}}):
+        for st in gr.get_state_history({"configurable": {"thread_id": thread_id}}):
             md = st.metadata or {}
             steps.append({
                 "checkpoint_id": ((st.config or {}).get("configurable") or {}).get("checkpoint_id"),
@@ -480,9 +520,10 @@ def api_thread_history(thread_id: str, limit: int = 80):
 
 
 @app.get("/api/memory/namespaces")
-def api_memory_namespaces():
+def api_memory_namespaces(graph: str = None):
     """LangGraph long-term memory (Store) browser — namespaces."""
-    st = getattr(graph, "store", None) if graph is not None else None
+    gr = _graph_for(graph)
+    st = getattr(gr, "store", None) if gr is not None else None
     if st is None:
         return JSONResponse({"error": "no local graph with a store"}, 404)
     try:
@@ -492,9 +533,11 @@ def api_memory_namespaces():
 
 
 @app.get("/api/memory/items")
-def api_memory_items(namespace: str, query: str = None, limit: int = 50):
+def api_memory_items(namespace: str, query: str = None, limit: int = 50,
+                     graph: str = None):
     """Items in one namespace (dot-separated); optional semantic/text query."""
-    st = getattr(graph, "store", None) if graph is not None else None
+    gr = _graph_for(graph)
+    st = getattr(gr, "store", None) if gr is not None else None
     if st is None:
         return JSONResponse({"error": "no local graph with a store"}, 404)
     try:
@@ -546,10 +589,12 @@ def _expected_score(expected, output) -> float:
 
 
 @app.post("/api/datasets/{ds_id}/run")
-def api_dataset_run(ds_id: str):
+def api_dataset_run(ds_id: str, graph: str = None):
     """Batch-eval: run the local graph over every dataset item; expected values
     become an expected_match score on each run. Fire-and-forget worker."""
-    if graph is None:
+    gname = graph or _default_name()
+    gr = _graph_for(gname)
+    if gr is None:
         return JSONResponse({"error": "no local graph (WINDHOVER_GRAPH unset)"}, 400)
     ds = store.dataset(ds_id)
     if not ds:
@@ -558,13 +603,13 @@ def api_dataset_run(ds_id: str):
 
     def worker():
         for i, item in enumerate(ds["items"]):
-            tracer = SpanBuilder(db_sink(store), run_name=cfg.graph_ref,
+            tracer = SpanBuilder(db_sink(store), run_name=gname,
                                  session=session, tags=[f"dataset:{ds['name']}"])
             config = {"callbacks": [tracer]}
-            if getattr(graph, "checkpointer", None) is not None:
+            if getattr(gr, "checkpointer", None) is not None:
                 config["configurable"] = {"thread_id": tracer.run_id}
             try:
-                out = graph.invoke(dict(item["input"]), config=config)
+                out = gr.invoke(dict(item["input"]), config=config)
             except Exception:
                 continue  # tracer already recorded the error run
             if "expected" in item:
@@ -586,12 +631,14 @@ async def api_events(request: Request):
     async def gen():
         import asyncio
         seen = -1
-        yield _sse("hello", {"version": TOPO.version})
+        def _ver():
+            return sum(tp.version for tp in TOPOS.values())
+        yield _sse("hello", {"version": _ver()})
         while True:
             if await request.is_disconnected():
                 break
-            if TOPO.version != seen:
-                seen = TOPO.version
+            if _ver() != seen:
+                seen = _ver()
                 yield _sse("topology", {"version": seen})
             else:
                 yield ": ping\n\n"

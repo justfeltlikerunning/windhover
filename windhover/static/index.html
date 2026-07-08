@@ -149,7 +149,7 @@ window.resumeThread=async(tid)=>{
   const raw=document.getElementById('hitl-val').value.trim();
   const body={}; const v=parseMaybeJSON(raw); if(v!==undefined) body.value=v;
   closeAll(); switchView('graph'); toast('Resuming thread '+tid.slice(0,8)+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
   await consumeRunStream(res);
@@ -157,14 +157,14 @@ window.resumeThread=async(tid)=>{
 window.resumeGoto=async(tid)=>{
   const g=document.getElementById('hitl-goto').value; if(!g) return toast('Pick a node first');
   closeAll(); switchView('graph'); toast('Redirecting thread to '+g+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goto:g})});
   if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
   await consumeRunStream(res);
 };
 window.rerunFrom=async(tid,cid)=>{
   closeAll(); switchView('graph'); toast('Forking from checkpoint '+String(cid).slice(-8)+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkpoint_id:cid})});
   if(!res.ok){ toast((await res.json()).error||'fork failed'); return; }
   await consumeRunStream(res);
@@ -174,7 +174,7 @@ window.editState=async(tid,cid,valuesJson)=>{
   if(cur==null) return;
   let values; try{ values=JSON.parse(cur); }catch(e){ return toast('Invalid JSON'); }
   const body={values}; if(cid) body.checkpoint_id=cid;
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const d=await res.json();
   if(!res.ok) return toast(d.error||'update_state failed');
@@ -184,7 +184,7 @@ window.editState=async(tid,cid,valuesJson)=>{
 
 /* ---------- time-travel (checkpoint history) ---------- */
 window.showHistory=async(tid)=>{
-  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history');
+  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history?'+rgparam());
     d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
   const steps=d.steps||[];
   $('#d-title').textContent='thread '+tid.slice(0,10)+' · time-travel';
@@ -398,6 +398,8 @@ aside{background:var(--rail);border-right:1px solid var(--rail-line)}
 .crumb{font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:.005em}
 .pill{font-family:var(--mono);letter-spacing:.02em}
 .plabel{font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+#gsel{background:transparent;border:none;color:var(--text2);font:inherit;outline:none;cursor:pointer;max-width:260px}
+#gsel option{background:var(--surface);color:var(--text)}
 .page-head h1{font-family:var(--display);font-weight:600;letter-spacing:.005em}
 .page-head h1::after{content:"";display:block;width:52px;height:4px;margin-top:7px;
   background:repeating-linear-gradient(90deg,var(--rufous) 0 7px,transparent 7px 13px)}
@@ -459,13 +461,13 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.13</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.14</span></div>
   </aside>
 
   <main>
     <div class="topbar">
       <span class="crumb" id="crumb">Graph</span>
-      <span class="pill" id="gpill"><span class="live-dot"></span><span class="plabel">graph</span><span id="gname">—</span></span>
+      <span class="pill" id="gpill"><span class="live-dot"></span><span class="plabel">graph</span><span id="gname">—</span><select id="gsel" style="display:none"></select></span>
       <div class="spacer"></div>
       <button class="icon-btn" id="theme" title="theme">${ICON.moon}</button>
       <button class="btn primary" id="newrun">${ICON.play} New run</button>
@@ -491,6 +493,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
           <div class="page-head"><h1>Runs</h1><span class="sub" id="runs-sub"></span></div>
           <div class="rtools">
             <input type="search" id="rq" placeholder="Search payloads, prompts, errors…">
+            <select id="rgraph" style="display:none"></select>
             <select id="rstatus"><option value="">All statuses</option>
               <option value="done">done</option><option value="error">error</option>
               <option value="interrupted">interrupted</option>
@@ -628,10 +631,31 @@ function cyStyle(){ return [
 function applyCyStyle(){ cy.style(cyStyle()); }
 
 /* ---------- graph ---------- */
+let GSEL=localStorage.getItem('wh-graph')||'';
+async function loadGraphList(){
+  try{
+    const d=await(await fetch('/api/graphs')).json();
+    window.__graphList=d.graphs||[];
+    if(!window.__graphList.includes(GSEL)) GSEL=d.default||'';
+    const sel=$('#gsel');
+    if(window.__graphList.length>1){
+      sel.style.display=''; $('#gname').style.display='none';
+      sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
+      sel.onchange=()=>{ GSEL=sel.value; localStorage.setItem('wh-graph',GSEL);
+        loadGraph(true); probeMemory(); if(VIEW==='memory') loadMemory(); };
+      const rg=$('#rgraph');
+      if(rg){ rg.style.display='';
+        rg.innerHTML='<option value="">All graphs</option>'+window.__graphList.map(g=>`<option>${esc(g)}</option>`).join('');
+        rg.onchange=e=>{RF.graph=e.target.value;RF.offset=0;loadRuns();}; }
+    }
+  }catch(e){}
+}
+function gparam(pfx){ return GSEL?pfx+'graph='+encodeURIComponent(GSEL):''; }
+function rgparam(){ const g=(window.__run||{}).graph||GSEL; return g?'graph='+encodeURIComponent(g):''; }
 let XRAY=false;
 window.toggleXray=()=>{ XRAY=!XRAY; const b=$('#xray'); if(b)b.classList.toggle('on',XRAY); loadGraph(true); };
 async function loadGraph(force){
-  const t=await(await fetch('/api/graph')).json();
+  const t=await(await fetch('/api/graph?'+gparam(''))).json();
   $('#gname').textContent=t.graph||'ingest-only';
   const xb=$('#xray'); if(xb) xb.style.display=t.xray?'':'none';
   if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
@@ -696,7 +720,7 @@ function codeBlock(src,hi){ const lines=src.code.replace(/\n$/,'').split('\n');
 /* ---------- node pane (tap a node on the graph) ---------- */
 async function openNode(name){
   let d={}; try{ d=await(await fetch('/api/nodes/'+encodeURIComponent(name))).json(); }catch(e){}
-  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source');
+  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source?'+gparam(''));
     if(rs.ok) src=await rs.json(); }catch(e){}
   const s=d.summary||{}, errs=s.errors||0;
   $('#d-title').textContent=name;
@@ -771,7 +795,7 @@ function switchView(v){ VIEW=v;
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
 
 /* ---------- new run ---------- */
-$('#newrun').onclick=async()=>{ let tpl={},ctx={},cs={}; try{const sd=await(await fetch('/api/schema')).json(); tpl=sd.template||{}; ctx=sd.context_template||{}; cs=sd.context_schema||{};}catch(e){}
+$('#newrun').onclick=async()=>{ let tpl={},ctx={},cs={}; try{const sd=await(await fetch('/api/schema?'+gparam(''))).json(); tpl=sd.template||{}; ctx=sd.context_template||{}; cs=sd.context_schema||{};}catch(e){}
   $('#input-json').value=JSON.stringify(tpl,null,2);
   const cw=document.getElementById('ctx-wrap');
   if(cw){ const has=cs&&cs.properties&&Object.keys(cs.properties).length;
@@ -785,6 +809,7 @@ $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json')
   const sess=$('#run-session').value.trim();
   const tags=$('#run-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
   if(sess)input._session=sess; if(tags.length)input._tags=tags;
+  if(GSEL) input._graph=GSEL;
   const paused=[...document.querySelectorAll('.pause-chip.on')].map(e=>e.dataset.n);
   if(paused.length) input._interrupt_before=paused;
   const cw=document.getElementById('ctx-wrap');
@@ -813,11 +838,11 @@ async function runNow(input){
 }
 
 /* ---------- runs table (filters + pagination) ---------- */
-const RF={q:'',status:'',tag:'',bookmarked:false,session:'',offset:0,limit:50};
+const RF={q:'',status:'',tag:'',bookmarked:false,session:'',graph:'',offset:0,limit:50};
 function runParams(){ const p=new URLSearchParams();
   if(RF.q)p.set('q',RF.q); if(RF.status)p.set('status',RF.status);
   if(RF.tag)p.set('tag',RF.tag); if(RF.bookmarked)p.set('bookmarked','1');
-  if(RF.session)p.set('session',RF.session); return p; }
+  if(RF.session)p.set('session',RF.session); if(RF.graph)p.set('graph',RF.graph); return p; }
 async function loadRuns(){
   const p=runParams(); p.set('limit',RF.limit); p.set('offset',RF.offset);
   const d=await(await fetch('/api/runs?'+p)).json();
@@ -1038,7 +1063,7 @@ window.resumeThread=async(tid)=>{
   const raw=document.getElementById('hitl-val').value.trim();
   const body={}; const v=parseMaybeJSON(raw); if(v!==undefined) body.value=v;
   closeAll(); switchView('graph'); toast('Resuming thread '+tid.slice(0,8)+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
   await consumeRunStream(res);
@@ -1046,14 +1071,14 @@ window.resumeThread=async(tid)=>{
 window.resumeGoto=async(tid)=>{
   const g=document.getElementById('hitl-goto').value; if(!g) return toast('Pick a node first');
   closeAll(); switchView('graph'); toast('Redirecting thread to '+g+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goto:g})});
   if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
   await consumeRunStream(res);
 };
 window.rerunFrom=async(tid,cid)=>{
   closeAll(); switchView('graph'); toast('Forking from checkpoint '+String(cid).slice(-8)+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkpoint_id:cid})});
   if(!res.ok){ toast((await res.json()).error||'fork failed'); return; }
   await consumeRunStream(res);
@@ -1063,7 +1088,7 @@ window.editState=async(tid,cid,valuesJson)=>{
   if(cur==null) return;
   let values; try{ values=JSON.parse(cur); }catch(e){ return toast('Invalid JSON'); }
   const body={values}; if(cid) body.checkpoint_id=cid;
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state',
+  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state?'+rgparam(),
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const d=await res.json();
   if(!res.ok) return toast(d.error||'update_state failed');
@@ -1073,7 +1098,7 @@ window.editState=async(tid,cid,valuesJson)=>{
 
 /* ---------- time-travel (checkpoint history) ---------- */
 window.showHistory=async(tid)=>{
-  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history');
+  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history?'+rgparam());
     d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
   const steps=d.steps||[];
   $('#d-title').textContent='thread '+tid.slice(0,10)+' · time-travel';
@@ -1199,7 +1224,7 @@ let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add
 
 let MEM_NS=[];
 async function probeMemory(){
-  try{ const r=await fetch('/api/memory/namespaces'); if(!r.ok) return;
+  try{ const r=await fetch('/api/memory/namespaces?'+gparam('')); if(!r.ok){ document.getElementById('nav-mem').style.display='none'; return; }
     MEM_NS=(await r.json()).namespaces||[];
     document.getElementById('nav-mem').style.display='';
     const m=document.querySelector('.bottom-nav .nav-mem'); if(m)m.style.display='';
@@ -1207,7 +1232,7 @@ async function probeMemory(){
 }
 async function loadMemory(){
   const sel=document.getElementById('mem-ns');
-  try{ const r=await fetch('/api/memory/namespaces'); MEM_NS=(await r.json()).namespaces||[]; }catch(e){}
+  try{ const r=await fetch('/api/memory/namespaces?'+gparam('')); MEM_NS=(await r.json()).namespaces||[]; }catch(e){}
   const cur=sel.value;
   sel.innerHTML=MEM_NS.map(ns=>`<option value="${esc(ns.join('.'))}">${esc(ns.join(' / '))}</option>`).join('');
   if(cur) sel.value=cur;
@@ -1215,7 +1240,7 @@ async function loadMemory(){
   const w=document.getElementById('mem-wrap');
   if(!ns){ w.innerHTML='<div class="empty"><div class="t">No memories yet</div>Nodes write with <span class="mono">get_store().put(namespace, key, value)</span> — items appear here.</div>'; return; }
   const q=document.getElementById('mem-q').value.trim();
-  const p=new URLSearchParams({namespace:ns}); if(q)p.set('query',q);
+  const p=new URLSearchParams({namespace:ns}); if(q)p.set('query',q); if(GSEL)p.set('graph',GSEL);
   let d={items:[]}; try{ d=await(await fetch('/api/memory/items?'+p)).json(); }catch(e){}
   w.innerHTML=(d.items||[]).length?`<div style="overflow:auto"><table>
     <thead><tr><th>Key</th><th>Value</th><th class="r">Updated</th></tr></thead>
@@ -1240,13 +1265,13 @@ async function loadDatasets(){
     :`<div class="empty" style="padding:14px"><div class="t">No datasets yet</div>POST <span class="mono">/api/datasets</span> with <span class="mono">{name, items:[{input:{…}, expected:…}]}</span> — runs land in a session with an <span class="mono">expected_match</span> score per item.</div>`;
 }
 window.runDataset=async(id,name)=>{
-  const r=await fetch('/api/datasets/'+id+'/run',{method:'POST'});
+  const r=await fetch('/api/datasets/'+id+'/run?'+gparam(''),{method:'POST'});
   const d=await r.json();
   if(!r.ok) return toast(d.error||'eval failed to start');
   toast('Eval started: '+d.items+' items → session '+d.session);
 };
 window.delDataset=async(id)=>{ await fetch('/api/datasets/'+id,{method:'DELETE'}); loadDatasets(); };
-loadGraph(); liveTopology(); probeMemory();
+loadGraphList().then(()=>{ loadGraph(); probeMemory(); }); liveTopology();
 /* deep links: #runs #sessions #stats #run=<id> */
 (function(){ const h=location.hash.slice(1);
   if(h==='runs'||h==='sessions'||h==='stats') switchView(h);

@@ -555,22 +555,36 @@ def test_message_serialization():
 
 
 def test_langgraph_json_discovery():
-    import json as _json, importlib
+    import json as _json
     d = tempfile.mkdtemp()
     gdir = os.path.join(d, "src"); os.makedirs(gdir)
-    open(os.path.join(gdir, "app.py"), "w").write("graph = None\n")
+    open(os.path.join(gdir, "app.py"), "w").write("graph = None\nother = None\n")
     open(os.path.join(d, "langgraph.json"), "w").write(
-        _json.dumps({"graphs": {"main": "./src/app.py:graph"}}))
+        _json.dumps({"graphs": {"main": "./src/app.py:graph",
+                                "side": "./src/app.py:other"}}))
     os.environ.pop("WINDHOVER_GRAPH", None)
     os.environ["WINDHOVER_GRAPH_DIR"] = d
     try:
         from windhover.config import Config
         cfg = Config.from_env()
-        assert cfg.graph_ref == "app:graph", cfg.graph_ref
+        assert cfg.graphs == (("main", "app:graph"), ("side", "app:other")), cfg.graphs
+        assert cfg.graph_ref == "app:graph"          # back-compat: first graph
         assert cfg.graph_dir == gdir, cfg.graph_dir
     finally:
         os.environ.pop("WINDHOVER_GRAPH_DIR", None)
-    print("langgraph.json discovery OK")
+    print("langgraph.json multi-discovery OK")
+
+
+def test_env_multi_graph_parsing():
+    from windhover.config import Config
+    os.environ["WINDHOVER_GRAPH"] = "alpha=m1:g1, m2:g2 ,beta=m3:g3"
+    try:
+        cfg = Config.from_env()
+        assert cfg.graphs == (("alpha", "m1:g1"), ("m2:g2", "m2:g2"),
+                              ("beta", "m3:g3")), cfg.graphs
+    finally:
+        os.environ.pop("WINDHOVER_GRAPH", None)
+    print("env multi-graph parsing OK")
 
 
 def test_nonblocking_sink_and_webhook_hook():
@@ -618,5 +632,6 @@ if __name__ == "__main__":
     test_functional_api_tracing()
     test_message_serialization()
     test_langgraph_json_discovery()
+    test_env_multi_graph_parsing()
     test_nonblocking_sink_and_webhook_hook()
     print("ALL SMOKE TESTS PASSED")
