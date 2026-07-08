@@ -250,6 +250,12 @@ window.pickDiff=async(id)=>{
 .code .ln{color:var(--muted);text-align:right;user-select:none;position:sticky;left:-12px;background:var(--surface2);padding-left:12px}
 .code .cl{white-space:pre}
 .code .errline{background:var(--err-weak)}
+.py-k{color:var(--accent-text);font-weight:600}
+.py-s{color:var(--ok)}
+.py-c{color:var(--muted);font-style:italic}
+.py-n{color:var(--chip-tool-t)}
+.py-d{color:var(--chip-llm-t)}
+.py-f{font-weight:700}
 .code .cl.errline{box-shadow:inset 3px 0 0 var(--err);padding-left:6px;margin-left:-6px}
 .errhint{font:11px var(--mono);color:var(--err);margin-top:3px;max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .diffgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -581,9 +587,23 @@ function tbLines(err,src){ const out=new Set();
     if(m[1].split('/').pop()===base){ const ln=+m[2];
       if(ln>=src.line_start&&ln<=src.line_end) out.add(ln); } }
   return out; }
+const PY_TOKEN=/(#.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(@\w+)|\b(def|class|return|if|elif|else|for|while|try|except|finally|raise|with|as|import|from|lambda|pass|break|continue|and|or|not|in|is|None|True|False|global|nonlocal|yield|async|await|del|assert|self)\b|(\b\d+(?:\.\d+)?\b)/g;
+function pyHi(line){ let out='',last=0,defNext=false;
+  for(const m of line.matchAll(PY_TOKEN)){
+    out+=esc(line.slice(last,m.index)); last=m.index+m[0].length;
+    const t=esc(m[0]);
+    if(m[1])      out+=`<span class="py-c">${t}</span>`;
+    else if(m[2]) out+=`<span class="py-s">${t}</span>`;
+    else if(m[3]) out+=`<span class="py-d">${t}</span>`;
+    else if(m[4]) out+=`<span class="py-k">${t}</span>`;
+    else          out+=`<span class="py-n">${t}</span>`;
+  }
+  out+=esc(line.slice(last));
+  // bold the name right after def/class
+  return out.replace(/(<span class="py-k">(?:def|class)<\/span> )([A-Za-z_]\w*)/,'$1<span class="py-f">$2</span>'); }
 function codeBlock(src,hi){ const lines=src.code.replace(/\n$/,'').split('\n');
   return `<div class="code">${lines.map((l,i)=>{ const ln=src.line_start+i, h=hi.has(ln);
-    return `<span class="ln ${h?'errline':''}">${ln}</span><span class="cl ${h?'errline':''}">${esc(l)||' '}</span>`;
+    return `<span class="ln ${h?'errline':''}">${ln}</span><span class="cl ${h?'errline':''}">${pyHi(l)||' '}</span>`;
   }).join('')}</div>`; }
 
 /* ---------- node pane (tap a node on the graph) ---------- */
