@@ -454,6 +454,8 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
   .bottom-nav svg{width:20px;height:20px}
   .drawer{width:100vw}
   .legend{display:none}
+  /* keep toasts clear of the fixed bottom nav */
+  .toast{left:12px;right:12px;max-width:none;bottom:calc(env(safe-area-inset-bottom) + 96px)}
   #view-runs th:nth-child(5),#view-runs td:nth-child(5),
   #view-runs th:nth-child(6),#view-runs td:nth-child(6),
   #view-runs th:nth-child(8),#view-runs td:nth-child(8){display:none}
