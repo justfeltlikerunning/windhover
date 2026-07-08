@@ -1366,7 +1366,17 @@ function _fleetSelect(graph){
   }
 }
 function fleetOpen(graph,id){ _fleetSelect(graph); if(id) openRun(id); }
-function fleetGraph(graph){ _fleetSelect(graph); switchView('graph'); }
+function fleetGraph(graph){
+  if((window.__graphList||[]).includes(graph)){ _fleetSelect(graph); switchView('graph'); return; }
+  // not serving: there is no topology to show — review its runs instead
+  const rg=$('#rgraph');
+  if(rg&&![...rg.options].some(o=>o.value===graph))
+    rg.insertAdjacentHTML('beforeend',`<option>${esc(graph)}</option>`);
+  if(rg) rg.value=graph;
+  RF.graph=graph; RF.offset=0;
+  switchView('runs');
+  toast(`${graph} isn’t being served — showing its recorded runs`);
+}
 window.fleetResume=async(graph,tid,rid)=>{
   const el=document.getElementById('fr-'+rid);
   const raw=el?el.value.trim():'';
