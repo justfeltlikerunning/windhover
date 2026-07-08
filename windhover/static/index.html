@@ -458,6 +458,32 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
   /* keep toasts clear of the fixed bottom nav */
   .toast{left:12px;right:12px;max-width:none;bottom:calc(env(safe-area-inset-bottom) + 96px)}
 }
+/* fleet — cross-graph overview */
+.fh{font-family:var(--display);font-size:19px;font-weight:600}
+.fatt{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--warn);
+  border-left:4px solid var(--warn);border-radius:var(--r-lg);padding:11px 14px;margin-bottom:8px;cursor:pointer;box-shadow:var(--shadow)}
+.fatt.running{border-color:var(--border);border-left-color:var(--warn)}
+.fatt:hover{background:var(--surface2)}
+.fatt .fq{color:var(--text2);font-size:12.5px;flex:1 1 180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;margin-top:16px}
+.fcard{padding:0}
+.fcard-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer}
+.fcard-head:hover{background:var(--surface2)}
+.fname{font-weight:600;font-size:13px;letter-spacing:.04em}
+.fbadge{font:600 11px var(--mono);color:var(--warn);background:var(--warn-weak);border-radius:999px;padding:3px 9px}
+.fbadge.run{animation:pulse 1.2s infinite}
+.fstats{display:flex;gap:14px;padding:9px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border)}
+.fstats .num{color:var(--text);font-weight:600}
+.fstats .ferr .num{color:var(--err)}
+.frun{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:12.5px}
+.frun:last-child{border-bottom:none}
+.frun:hover{background:var(--surface2)}
+.frun .fmeta{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fid{color:var(--text2);font-size:11.5px}
+.fgraph{color:var(--accent-text);font-weight:600;font-size:12px}
+.fago{margin-left:auto;color:var(--muted);font:11px var(--mono);white-space:nowrap}
+@media (max-width:600px){.fgrid{grid-template-columns:1fr}}
+
 #ptr{position:fixed;top:calc(env(safe-area-inset-top) + 64px);left:50%;transform:translate(-50%,-16px);
   background:var(--surface);border:1px solid var(--border);border-radius:999px;box-shadow:var(--shadow-lg);
   padding:7px 14px;font:600 12px var(--mono);color:var(--accent-text);z-index:65;opacity:0;
@@ -482,6 +508,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <span class="wordmark">Windhover<span class="species">LangGraph observability</span></span>
     </div>
     <nav class="nav">
+      <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet} Fleet</button>
       <button data-v="graph" class="on">${ICON.graph} Graph</button>
       <button data-v="runs">${ICON.list} Runs</button>
       <button data-v="sessions">${ICON.layers} Sessions</button>
@@ -558,11 +585,18 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
           <div id="stats-body"></div>
         </div>
       </div>
+      <div id="view-fleet" style="display:none">
+        <div class="page">
+          <div class="page-head"><h1>Fleet</h1><span class="sub">every graph, one glance</span></div>
+          <div id="fleet-body"><div class="empty">Loading…</div></div>
+        </div>
+      </div>
     </div>
   </main>
 </div>
 
 <div class="bottom-nav">
+  <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet}<span>Fleet</span></button>
   <button data-v="graph" class="on">${ICON.graph}<span>Graph</span></button>
   <button data-v="runs">${ICON.list}<span>Runs</span></button>
   <button data-v="sessions">${ICON.layers}<span>Sessions</span></button>
@@ -614,6 +648,7 @@ const ICON = {
   play:'<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 4.8v14.4c0 .8.9 1.3 1.6.9l11-7.2c.6-.4.6-1.4 0-1.8l-11-7.2c-.7-.4-1.6.1-1.6.9z"/></svg>',
   moon:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 13.5A8 8 0 1 1 10.5 4 6.5 6.5 0 0 0 20 13.5z"/></svg>',
   x:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  fleet:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7.4" height="7.4" rx="1.6"/><rect x="13.1" y="3.5" width="7.4" height="7.4" rx="1.6"/><rect x="3.5" y="13.1" width="7.4" height="7.4" rx="1.6"/><rect x="13.1" y="13.1" width="7.4" height="7.4" rx="1.6"/></svg>',
 };
 document.body.innerHTML = document.body.innerHTML.replaceAll(/\$\{ICON\.(\w+)\}/g,(m,k)=>ICON[k]||'');
 
@@ -667,6 +702,7 @@ async function loadGraphList(){
     if(!window.__graphList.includes(GSEL)) GSEL=d.default||'';
     const sel=$('#gsel');
     if(window.__graphList.length>1){
+      $$('.nav-fleet').forEach(b=>b.style.display='');   // fleet view only makes sense multi-graph
       sel.style.display=''; $('#gname').style.display='none';
       sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
       sel.onchange=()=>{ GSEL=sel.value; localStorage.setItem('wh-graph',GSEL);
@@ -823,10 +859,13 @@ function switchView(v){ VIEW=v;
   if(location.hash!=='#'+v) history.replaceState(null,'','#'+v);
   $$('.nav button,.bottom-nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   $('#crumb').textContent=v[0].toUpperCase()+v.slice(1);
-  for(const k of ['graph','runs','sessions','memory','stats'])
+  for(const k of ['graph','runs','sessions','memory','stats','fleet'])
     $('#view-'+k).style.display=v===k?'':'none';
   if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='memory')loadMemory();
   if(v==='stats'){loadStats();loadDatasets();}
+  if(v==='fleet')loadFleet();
+  clearInterval(window.__fleetT);
+  if(v==='fleet') window.__fleetT=setInterval(()=>{ if(!document.hidden) loadFleet(true); },15000);
   if(cy&&v==='graph')setTimeout(()=>cy.resize(),40);
 }
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
@@ -1301,6 +1340,57 @@ function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','
 function fmtms(ms){ return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s'; }
 function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
 function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
+
+/* ---------- fleet (cross-graph overview) ---------- */
+function _fleetSelect(graph){
+  if(graph&&(window.__graphList||[]).includes(graph)&&GSEL!==graph){
+    GSEL=graph; localStorage.setItem('wh-graph',GSEL);
+    const sel=$('#gsel'); if(sel) sel.value=graph;
+    RF.graph=GSEL; const rg=$('#rgraph'); if(rg) rg.value=GSEL;
+    loadGraph(true); probeMemory();
+  }
+}
+function fleetOpen(graph,id){ _fleetSelect(graph); if(id) openRun(id); }
+function fleetGraph(graph){ _fleetSelect(graph); switchView('graph'); }
+function _fRun(r){
+  return `<div class="frun" onclick="fleetOpen('${esc(r.graph||'')}','${r.id}')">
+    <span class="status ${r.status}"><span class="d"></span>${r.status}</span>
+    <span class="mono fid">${r.id.slice(0,8)}</span>
+    <span class="fmeta">${r.node_count||0} nodes${r.total_tokens?` · ${fmtk(r.total_tokens)} tok`:''}${r.duration_ms?` · ${fmtms(r.duration_ms)}`:''}</span>
+    <span class="fago">${ago(r.started_ms)}</span></div>`;
+}
+async function loadFleet(quiet){
+  let d; try{ d=await(await fetch('/api/overview')).json(); }catch(e){
+    if(!quiet) $('#fleet-body').innerHTML='<div class="empty"><div class="t">Overview unavailable</div>Check the collector.</div>';
+    return; }
+  const att=d.attention||[], graphs=(d.graphs||[]).filter(g=>g.name);
+  let html='';
+  if(att.length){
+    html+=`<div class="page-head" style="margin-top:2px"><h2 class="fh">Needs attention</h2><span class="sub">${att.length} run${att.length===1?'':'s'} awaiting</span></div>`;
+    html+=att.map(a=>`<div class="fatt ${a.status}" onclick="fleetOpen('${esc(a.graph||'')}','${a.id}')">
+      <span class="status ${a.status}"><span class="d"></span>${a.status}</span>
+      <span class="mono fgraph">${esc(a.graph||'—')}</span>
+      <span class="mono fid">${a.id.slice(0,8)}</span>
+      ${a.interrupt_summary?`<span class="fq">${esc(a.interrupt_summary)}</span>`:''}
+      <span class="fago">${a.status==='interrupted'?'waiting ':''}${ago(a.started_ms)}</span></div>`).join('');
+  }
+  html+=`<div class="fgrid">`+graphs.map(g=>`
+    <div class="card fcard">
+      <div class="fcard-head" onclick="fleetGraph('${esc(g.name)}')">
+        <span class="fname mono">${esc(g.name)}</span>
+        ${g.serving?'':'<span class="tagchip">not serving</span>'}
+        ${g.interrupted_now?`<span class="fbadge">⏸ ${g.interrupted_now} awaiting approval</span>`:''}
+        ${g.running_now?`<span class="fbadge run">● ${g.running_now} running</span>`:''}
+      </div>
+      <div class="fstats">
+        <span><b class="num">${g.runs_7d}</b> runs · 7d</span>
+        <span class="${g.errors_7d?'ferr':''}"><b class="num">${g.errors_7d}</b> errors · 7d</span>
+        ${g.last_run?`<span>last ${ago(g.last_run.started_ms)}</span>`:'<span>no runs yet</span>'}
+      </div>
+      ${(g.recent||[]).map(_fRun).join('')||'<div class="empty" style="padding:14px">No runs recorded.</div>'}
+    </div>`).join('')+`</div>`;
+  $('#fleet-body').innerHTML=html||'<div class="empty"><div class="t">No graphs yet</div>Serve a graph or trace runs in.</div>';
+}
 let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),2600); }
 
 let MEM_NS=[];
@@ -1352,13 +1442,16 @@ window.runDataset=async(id,name)=>{
   toast('Eval started: '+d.items+' items → session '+d.session);
 };
 window.delDataset=async(id)=>{ await fetch('/api/datasets/'+id,{method:'DELETE'}); loadDatasets(); };
-loadGraphList().then(()=>{ loadGraph(); probeMemory(); }); liveTopology();
+loadGraphList().then(()=>{ loadGraph(); probeMemory();
+  // multi-graph default landing = fleet, unless a deep link or notification chose a view
+  if(multiGraph()&&!location.hash&&!new URLSearchParams(location.search).get('run')) switchView('fleet');
+}); liveTopology();
 /* deep links: #runs #sessions #stats #run=<id> (also ?run=<id> from push notifications) */
 (function(){
   const qrun=new URLSearchParams(location.search).get('run');
   const h=location.hash.slice(1);
   if(qrun){ switchView('runs'); openRun(qrun); }
-  else if(h==='runs'||h==='sessions'||h==='stats') switchView(h);
+  else if(h==='runs'||h==='sessions'||h==='stats'||h==='fleet') switchView(h);
   else if(h.startsWith('run=')){ switchView('runs'); openRun(h.slice(4)); }
 })();
 /* notification tapped while the PWA is already open: sw navigates us — react to the hash change */

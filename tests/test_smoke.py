@@ -721,3 +721,59 @@ if __name__ == "__main__":
     test_score_rejects_nonfinite()
     test_tracer_cleanup_no_leak()
     print("ALL SMOKE TESTS PASSED")
+
+
+def test_overview_fleet():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    now = int(time.time() * 1000)
+    # alpha: 4 done + 1 interrupted (awaiting approval, with a question payload)
+    for i in range(4):
+        rid = f"a{i}"
+        s.open_run({"id": rid, "graph": "alpha", "started_ms": now - 1000 * (i + 2)})
+        s.close_run(rid, "done", now - 1000 * (i + 1))
+    s.open_run({"id": "a-wait", "graph": "alpha", "thread_id": "t1",
+                "started_ms": now - 500})
+    s.add_span({"id": "iv1", "run_id": "a-wait", "type": "interrupt", "name": "interrupt",
+                "seq": 0, "output": {"question": "Approve ATP reports?"}})
+    s.close_run("a-wait", "interrupted", now - 400)
+    # beta: 1 error, 1 running
+    s.open_run({"id": "b0", "graph": "beta", "started_ms": now - 3000})
+    s.close_run("b0", "error", now - 2900, error="boom")
+    s.open_run({"id": "b-run", "graph": "beta", "started_ms": now - 100})
+    # gamma: ingest-only graph with an old run (outside the 7d window)
+    s.open_run({"id": "c0", "graph": "gamma", "started_ms": now - 30 * 86400_000})
+    s.close_run("c0", "done", now - 30 * 86400_000 + 5)
+    # delta: an interrupted run that was ALREADY resumed (newer run, same thread)
+    # — handled, must NOT appear in attention
+    s.open_run({"id": "d-old-wait", "graph": "delta", "thread_id": "t9",
+                "started_ms": now - 9000})
+    s.close_run("d-old-wait", "interrupted", now - 8900)
+    s.open_run({"id": "d-resume", "graph": "delta", "thread_id": "t9",
+                "started_ms": now - 8000})
+    s.close_run("d-resume", "done", now - 7900)
+
+    ov = s.overview(days=7, recent_n=3, serving=("alpha", "beta"))
+    by = {g["name"]: g for g in ov["graphs"]}
+    # every graph appears; serving flags honest
+    assert by["alpha"]["serving"] and by["beta"]["serving"] and not by["gamma"]["serving"]
+    # counts inside the window
+    assert by["alpha"]["runs_7d"] == 5 and by["alpha"]["errors_7d"] == 0
+    # resumed interrupt is handled — excluded from attention and rollups
+    assert "d-old-wait" not in [a["id"] for a in ov["attention"]]
+    assert by["delta"]["interrupted_now"] == 0
+    assert by["beta"]["errors_7d"] == 1
+    assert by["gamma"]["runs_7d"] == 0          # old run outside window
+    # attention: newest first, both statuses, question surfaced, waiting clock
+    att = ov["attention"]
+    assert [a["id"] for a in att] == ["b-run", "a-wait"]
+    aw = att[1]
+    assert aw["status"] == "interrupted" and "Approve ATP reports?" in aw["interrupt_summary"]
+    assert aw["waiting_ms"] >= 0 and aw["thread_id"] == "t1"
+    # per-graph rollups + recent capped at 3, newest first, last_run = newest
+    assert by["alpha"]["interrupted_now"] == 1 and by["beta"]["running_now"] == 1
+    assert len(by["alpha"]["recent"]) == 3
+    assert by["alpha"]["recent"][0]["id"] == "a-wait" == by["alpha"]["last_run"]["id"]
+    # gamma still lists its ancient run in recent (review, not amnesia)
+    assert by["gamma"]["recent"][0]["id"] == "c0"
+    print("overview fleet OK")

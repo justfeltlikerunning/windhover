@@ -100,6 +100,11 @@ graph.invoke(input, config={
 - **Dashboards** — runs/tokens per day, per-model usage and latency, per-node latency, error rate.
 - **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
   scopes all views (runs, sessions, stats included — metrics never mix graphs).
+- **Fleet view** — with multiple graphs, a cross-graph overview becomes the landing page:
+  a **Needs attention** list of every run paused on an interrupt (with the question shown)
+  or still running, plus per-graph health cards (last run, 7-day run/error counts, recent
+  runs). Interrupts that were already resumed on their thread don't linger as false
+  positives. Also available as `GET /api/overview`.
 - **Alerts** — `WINDHOVER_WEBHOOK` posts a JSON summary when a run errors or pauses; set
   VAPID keys and installed browsers can also subscribe to **Web Push** notifications (a 🔔 in
   the top bar; works as an installed PWA, iOS 16.4+ included).
@@ -135,10 +140,9 @@ enable browser Web Push; unset = feature hidden) · `WINDHOVER_VAPID_SUBJECT` (a
 `https:` contact URL sent to the push service; use a real domain — some services reject `.local`).
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
 
-**Web Push setup:** install the push extra (`pip install windhover[push]`), generate a VAPID
-keypair (e.g. `py-vapid`), set the three env vars above (over **HTTPS** — browsers only allow
-push from a secure origin), install the app to your home screen, and tap the 🔔. Alerts fire on
-the same errors/interrupts as the webhook.
+**Web Push setup:** generate a VAPID keypair (e.g. `openssl`/`py-vapid`), set the three env
+vars above (over **HTTPS** — browsers only allow push from a secure origin), install the app to
+your home screen, and tap the 🔔. Alerts fire on the same errors/interrupts as the webhook.
 
 ## Docs
 **[The guide](docs/GUIDE.md)** covers every feature with how-tos and the fine print —

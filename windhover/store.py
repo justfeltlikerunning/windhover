@@ -349,6 +349,104 @@ class Store:
                 GROUP BY session ORDER BY last_ms DESC LIMIT ?""",
                 (*args, limit)).fetchall()]
 
+    def overview(self, days: int = 7, recent_n: int = 3, serving: tuple = ()) -> dict:
+        """Fleet view: per-graph health + every run currently needing a human.
+
+        One store call, three grouped queries — no per-graph fan-out.
+        `serving` is the live registry; graphs that only exist in stored runs
+        (ingest-only or renamed) are still reported, flagged serving=False.
+        """
+        cutoff = int((time.time() - days * 86400) * 1000)
+        run_cols = ("id, graph, status, session, tags, thread_id, error, "
+                    "started_ms, duration_ms, node_count, total_tokens")
+        with _lock, self._conn() as c:
+            counts = c.execute("""SELECT COALESCE(graph,'') g, status, COUNT(*) n
+                FROM runs WHERE started_ms > ? GROUP BY g, status""",
+                (cutoff,)).fetchall()
+            all_graphs = [r[0] for r in c.execute(
+                "SELECT DISTINCT COALESCE(graph,'') FROM runs").fetchall()]
+            try:
+                recent = c.execute(f"""SELECT {run_cols} FROM (
+                    SELECT *, ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(graph,'') ORDER BY started_ms DESC) rn
+                    FROM runs) WHERE rn <= ? ORDER BY started_ms DESC""",
+                    (recent_n,)).fetchall()
+            except sqlite3.OperationalError:  # pre-3.25 sqlite: small per-graph loop
+                recent = []
+                for g in all_graphs:
+                    recent += c.execute(f"""SELECT {run_cols} FROM runs
+                        WHERE COALESCE(graph,'')=? ORDER BY started_ms DESC LIMIT ?""",
+                        (g, recent_n)).fetchall()
+            # an interrupted run whose thread has a NEWER run was already
+            # resumed (resume = new run) — it is handled, not awaiting
+            attention = c.execute(f"""SELECT {run_cols} FROM runs r
+                WHERE r.status IN ('interrupted','running')
+                AND (r.status='running' OR r.thread_id IS NULL OR NOT EXISTS (
+                    SELECT 1 FROM runs r2 WHERE r2.thread_id = r.thread_id
+                    AND r2.id != r.id AND r2.started_ms > r.started_ms))
+                ORDER BY r.started_ms DESC LIMIT 50""").fetchall()
+            # interrupt payloads for the attention rows (question shown on the card)
+            ids = [r["id"] for r in attention]
+            summaries = {}
+            if ids:
+                ph = ",".join("?" * len(ids))
+                for s in c.execute(f"""SELECT run_id, output FROM spans
+                        WHERE type='interrupt' AND run_id IN ({ph})
+                        AND output IS NOT NULL""", ids).fetchall():
+                    summaries.setdefault(s["run_id"], s["output"])
+
+        def _row(r: sqlite3.Row) -> dict:
+            d = dict(r)
+            d["tags"] = json.loads(d["tags"]) if d.get("tags") else []
+            return d
+
+        now_ms = int(time.time() * 1000)
+        att = []
+        for r in attention:
+            d = _row(r)
+            d["waiting_ms"] = max(0, now_ms - (d.get("started_ms") or now_ms))
+            raw = summaries.get(d["id"])
+            if raw:
+                try:
+                    v = json.loads(raw)
+                    if isinstance(v, list) and v:   # interrupt() payloads arrive list-wrapped
+                        v = v[0]
+                    if isinstance(v, dict):
+                        v = v.get("question") or v.get("instructions") or v.get("value") or v
+                    d["interrupt_summary"] = v if isinstance(v, str) else json.dumps(v)
+                except Exception:
+                    d["interrupt_summary"] = str(raw)
+                d["interrupt_summary"] = str(d["interrupt_summary"])[:200]
+            att.append(d)
+
+        by_graph: dict[str, dict] = {}
+        names = list(dict.fromkeys([*serving, *all_graphs]))
+        for g in names:
+            by_graph[g] = {"name": g, "serving": g in serving,
+                           "runs_7d": 0, "errors_7d": 0,
+                           "interrupted_now": 0, "running_now": 0,
+                           "recent": [], "last_run": None}
+        for r in counts:
+            g = by_graph.get(r["g"])
+            if g is None:
+                continue
+            g["runs_7d"] += r["n"]
+            if r["status"] == "error":
+                g["errors_7d"] += r["n"]
+        for d in att:
+            g = by_graph.get(d.get("graph") or "")
+            if g is not None:
+                key = "interrupted_now" if d["status"] == "interrupted" else "running_now"
+                g[key] += 1
+        for r in recent:
+            d = _row(r)
+            g = by_graph.get(d.get("graph") or "")
+            if g is not None and len(g["recent"]) < recent_n:
+                g["recent"].append(d)
+                if g["last_run"] is None:
+                    g["last_run"] = d
+        return {"attention": att, "graphs": list(by_graph.values())}
+
     def run_detail(self, run_id: str) -> Optional[dict]:
         with _lock, self._conn() as c:
             r = c.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()

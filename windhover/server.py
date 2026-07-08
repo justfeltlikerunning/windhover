@@ -676,6 +676,13 @@ def api_stats(days: int = 30, graph: str = None):
     return JSONResponse(store.stats(days=max(1, min(days, 365)), graph=graph or None))
 
 
+@app.get("/api/overview")
+def api_overview(days: int = 7):
+    """Fleet view: per-graph health + runs awaiting a human, across ALL graphs."""
+    return JSONResponse(store.overview(days=max(1, min(days, 90)),
+                                       serving=tuple(GRAPHS.keys())))
+
+
 @app.get("/api/events")
 async def api_events(request: Request):
     async def gen():
