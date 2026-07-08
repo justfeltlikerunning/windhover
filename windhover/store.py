@@ -27,6 +27,7 @@ class Store:
         self.path = path
         self.has_fts = False
         self.has_json1 = False
+        self.on_run_closed = None   # optional hook(run_dict) — used for webhooks
         self._init()
 
     def _conn(self) -> sqlite3.Connection:
@@ -171,6 +172,12 @@ class Store:
                 WHERE id=?""",
                 (status, ended_ms, ended_ms - started, error, agg["nc"], agg["lc"],
                  pt, ct, (pt or 0) + (ct or 0) if (pt or ct) else None, agg["cost"], run_id))
+        if self.on_run_closed is not None:
+            try:
+                self.on_run_closed({"id": run_id, "status": status, "error": error,
+                                    "duration_ms": ended_ms - started})
+            except Exception:
+                pass
 
     def update_run_meta(self, run_id: str, tags: Optional[list] = None,
                         bookmarked: Optional[bool] = None) -> bool:

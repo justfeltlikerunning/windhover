@@ -140,6 +140,36 @@ if cfg.retention_days > 0:
     threading.Thread(target=_retention_loop, daemon=True).start()
 
 
+def _fire_webhook(summary: dict) -> None:
+    """POST a compact alert when a run needs attention. Fire-and-forget."""
+    if summary.get("status") not in ("error", "interrupted"):
+        return
+    def _post():
+        try:
+            import urllib.request
+            run = store.run_detail(summary["id"]) or summary
+            body = {
+                "source": "windhover", "graph": run.get("graph") or cfg.graph_ref,
+                "run_id": summary["id"], "status": summary["status"],
+                "duration_ms": summary.get("duration_ms"),
+                "session": run.get("session"), "thread_id": run.get("thread_id"),
+                "error": (str(summary.get("error") or "").strip().splitlines() or [None])[-1],
+                "text": f"[windhover] run {summary['id']} {summary['status']}"
+                        f" ({run.get('graph') or cfg.graph_ref})",
+            }
+            req = urllib.request.Request(
+                cfg.webhook, data=json.dumps(body).encode(),
+                headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=5)
+        except Exception:
+            pass
+    threading.Thread(target=_post, daemon=True).start()
+
+
+if cfg.webhook:
+    store.on_run_closed = _fire_webhook
+
+
 def _template(schema: dict) -> dict:
     out = {}
     for k, p in (schema.get("properties") or {}).items():

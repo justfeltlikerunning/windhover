@@ -187,10 +187,45 @@ for semantic grading, run your own judge and `POST /api/runs/{id}/scores`.
   shows the tool-call JSON as the LLM output instead of an empty box.
 - **Auth**: set `WINDHOVER_TOKEN` to require `Authorization: Bearer …` (or `?token=`)
   on `/api`. The UI prompts once and remembers. The HTML shell itself stays public —
-  it contains no data.
+  it contains no data. External tracers pass it as `WindhoverTracer(url, token="…")`.
+  **Set the token before exposing Windhover beyond localhost** — the HITL endpoints can
+  resume and edit graph state.
+- **Alerts**: `WINDHOVER_WEBHOOK=https://…` POSTs a compact JSON summary whenever a run
+  errors or pauses on an interrupt (`{source, graph, run_id, status, error, text, …}`) —
+  point it at a Slack/Discord webhook or your own receiver. Fire-and-forget.
 - **Retention**: `WINDHOVER_RETENTION_DAYS=30` prunes old runs on startup and every 6h.
   Default keeps everything.
 - **Deep links**: `#runs`, `#sessions`, `#stats`, `#run=<id>`.
+
+## Running it for real
+
+- **The tracer never slows your app.** Events go onto a bounded in-memory queue drained
+  by a background thread; if the Windhover host is slow or down, events are dropped —
+  your pipeline's latency is unchanged. (Sheds oldest-first at 2,000 queued events.)
+- **Systemd** (adjust paths):
+  ```ini
+  [Unit]
+  Description=Windhover
+  After=network.target
+
+  [Service]
+  WorkingDirectory=/opt/myapp
+  Environment=WINDHOVER_GRAPH=myapp.graphs:graph
+  Environment=WINDHOVER_DB=/var/lib/windhover/windhover.db
+  Environment=WINDHOVER_TOKEN=change-me
+  Environment=WINDHOVER_RETENTION_DAYS=30
+  ExecStart=/opt/myapp/.venv/bin/windhover
+  Restart=always
+  TimeoutStopSec=10
+
+  [Install]
+  WantedBy=multi-user.target
+  ```
+  `TimeoutStopSec` matters: open SSE connections otherwise stretch restarts.
+- **Reverse proxy**: plain HTTP + SSE — any proxy works; disable response buffering for
+  `/api/events` and `/api/run` (nginx: `proxy_buffering off;`).
+- **Backups**: runs live in one SQLite file (`WINDHOVER_DB`); copy it (plus `-wal`) or
+  rely on `/api/export` for tabular run data.
 
 ## Try it all on the demo graph
 

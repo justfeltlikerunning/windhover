@@ -18,6 +18,7 @@ class Config:
     pricing_path: str
     retention_days: int       # 0 = keep runs forever
     token: str                # WINDHOVER_TOKEN: require Bearer/query token on /api ("" = open)
+    webhook: str              # WINDHOVER_WEBHOOK: POST run summaries on error/interrupted ("" = off)
 
     @staticmethod
     def _discover() -> tuple[str, str]:
@@ -58,4 +59,5 @@ class Config:
             pricing_path=os.environ.get("WINDHOVER_PRICING", str(PKG_DIR / "pricing.json")),
             retention_days=int(os.environ.get("WINDHOVER_RETENTION_DAYS", "0") or 0),
             token=os.environ.get("WINDHOVER_TOKEN", ""),
+            webhook=os.environ.get("WINDHOVER_WEBHOOK", ""),
         )

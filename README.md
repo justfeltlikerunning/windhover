@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/logo.svg" width="112" alt="Windhover — a hovering kestrel"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/logo.svg" width="112" alt="Windhover — a hovering kestrel"></p>
 <h1 align="center">Windhover</h1>
 <p align="center">
   <a href="https://pypi.org/project/windhover/"><img src="https://img.shields.io/pypi/v/windhover" alt="PyPI"></a>
@@ -21,11 +21,11 @@ your own app. No LangSmith account, no cloud tunnel, no fragile websocket. HTTP 
 
 | Living graph (parallel fan-out) | Trace drawer — retrievers, LLM calls, cost, state |
 |---|---|
-| ![Graph view](docs/graph.png) | ![Trace drawer](docs/trace.png) |
+| ![Graph view](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/graph.png) | ![Trace drawer](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/trace.png) |
 
 | Runs — search, tags, sessions, interrupts | Dashboards — per-day, per-model |
 |---|---|
-| ![Runs table](docs/runs.png) | ![Stats](docs/stats.png) |
+| ![Runs table](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/runs.png) | ![Stats](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/stats.png) |
 
 ## Quick start
 ```bash

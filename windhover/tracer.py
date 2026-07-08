@@ -456,19 +456,48 @@ def db_sink(store) -> Callable[[dict], None]:
     return lambda ev: apply_to_store(store, ev, source="ui")
 
 
-def http_sink(base_url: str) -> Callable[[dict], None]:
-    import urllib.request
+def http_sink(base_url: str, token: Optional[str] = None,
+              max_queue: int = 2000) -> Callable[[dict], None]:
+    """Non-blocking: events go onto a bounded queue drained by a daemon thread,
+    so a slow or unreachable Windhover host NEVER adds latency to the traced
+    app. On overflow the oldest events are dropped (observability is
+    best-effort; the app comes first)."""
+    import queue as _q, threading as _t, urllib.request
     url = base_url.rstrip("/") + "/api/ingest"
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    buf: "_q.Queue" = _q.Queue(maxsize=max_queue)
+
+    def _drain():
+        while True:
+            ev = buf.get()
+            try:
+                req = urllib.request.Request(url, data=json.dumps(ev).encode(),
+                                             headers=headers)
+                urllib.request.urlopen(req, timeout=5)
+            except Exception:
+                pass  # drop — never retry-storm a down collector
+
+    _t.Thread(target=_drain, daemon=True).start()
 
     def sink(ev: dict) -> None:
-        req = urllib.request.Request(url, data=json.dumps(ev).encode(),
-                                     headers={"Content-Type": "application/json"})
-        urllib.request.urlopen(req, timeout=3)
+        try:
+            buf.put_nowait(ev)
+        except _q.Full:
+            try:
+                buf.get_nowait()          # shed oldest, keep newest
+                buf.put_nowait(ev)
+            except Exception:
+                pass
     return sink
 
 
 class WindhoverTracer(SpanBuilder):
-    """Drop into any app: config={"callbacks": [WindhoverTracer("http://host:8090")]}."""
+    """Drop into any app: config={"callbacks": [WindhoverTracer("http://host:8090")]}.
+    Non-blocking; pass token= when the collector sets WINDHOVER_TOKEN."""
     def __init__(self, base_url: str, name: str = "external",
-                 session: Optional[str] = None, tags: Optional[list] = None):
-        super().__init__(http_sink(base_url), run_name=name, session=session, tags=tags)
+                 session: Optional[str] = None, tags: Optional[list] = None,
+                 token: Optional[str] = None):
+        super().__init__(http_sink(base_url, token=token),
+                         run_name=name, session=session, tags=tags)

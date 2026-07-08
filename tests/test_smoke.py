@@ -573,6 +573,26 @@ def test_langgraph_json_discovery():
     print("langgraph.json discovery OK")
 
 
+def test_nonblocking_sink_and_webhook_hook():
+    # sink to an unreachable host must return instantly and never raise
+    from windhover.tracer import http_sink
+    sink = http_sink("http://10.255.255.1:9", max_queue=10)
+    t0 = time.time()
+    for i in range(50):
+        sink({"kind": "span", "i": i})
+    assert time.time() - t0 < 0.5, "sink blocked the caller"
+
+    # store hook fires with the closing status (webhook wiring point)
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    fired = []
+    s.on_run_closed = lambda summary: fired.append(summary)
+    s.open_run({"id": "w1", "graph": "g", "started_ms": 1000})
+    s.close_run("w1", "error", 1500, error="Boom: it broke")
+    assert fired and fired[0]["status"] == "error" and "Boom" in fired[0]["error"]
+    print("non-blocking sink + webhook hook OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -598,4 +618,5 @@ if __name__ == "__main__":
     test_functional_api_tracing()
     test_message_serialization()
     test_langgraph_json_discovery()
+    test_nonblocking_sink_and_webhook_hook()
     print("ALL SMOKE TESTS PASSED")
