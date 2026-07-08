@@ -1311,11 +1311,19 @@ window.runDataset=async(id,name)=>{
 };
 window.delDataset=async(id)=>{ await fetch('/api/datasets/'+id,{method:'DELETE'}); loadDatasets(); };
 loadGraphList().then(()=>{ loadGraph(); probeMemory(); }); liveTopology();
-/* deep links: #runs #sessions #stats #run=<id> */
-(function(){ const h=location.hash.slice(1);
-  if(h==='runs'||h==='sessions'||h==='stats') switchView(h);
+/* deep links: #runs #sessions #stats #run=<id> (also ?run=<id> from push notifications) */
+(function(){
+  const qrun=new URLSearchParams(location.search).get('run');
+  const h=location.hash.slice(1);
+  if(qrun){ switchView('runs'); openRun(qrun); }
+  else if(h==='runs'||h==='sessions'||h==='stats') switchView(h);
   else if(h.startsWith('run=')){ switchView('runs'); openRun(h.slice(4)); }
 })();
+/* notification tapped while the PWA is already open: sw navigates us — react to the hash change */
+window.addEventListener('hashchange',()=>{
+  const h=location.hash.slice(1);
+  if(h.startsWith('run=')){ switchView('runs'); openRun(h.slice(4)); }
+});
 </script>
 <script>
 /* Web Push opt-in. Button reveals only when the server has VAPID configured. */

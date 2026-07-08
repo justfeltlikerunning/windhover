@@ -197,7 +197,7 @@ def _push_alert(summary: dict) -> None:
     push.send_to_all(store, cfg, {
         "title": f"Windhover — run {summary['status']}",
         "body": f"{graph} · {summary['id']}" + (f"\n{err}" if err else ""),
-        "tag": summary["id"], "url": f"/?run={summary['id']}",
+        "tag": summary["id"], "url": f"/#run={summary['id']}",
         "status": summary["status"],
     })
 
