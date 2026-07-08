@@ -154,6 +154,23 @@ curl -X POST :8090/api/datasets -H 'Content-Type: application/json' -d '{
 numbers/booleans, substring-of-output-JSON for strings. It's a smoke-level matcher —
 for semantic grading, run your own judge and `POST /api/runs/{id}/scores`.
 
+## Deep agents & agent frameworks
+
+Agent frameworks built on LangGraph — including `deepagents` (planning, virtual file
+system, sub-agents) and `create_react_agent` — trace with **no integration work**:
+
+- Every LLM call shows the **tools the model was offered**, so you can see an agent's
+  action space shrink inside a sub-agent.
+- **Sub-agents nest**: the `task` tool call that spawns one carries the entire child
+  agent's spans beneath it — one tree from top-level plan to nested completion.
+- **Plans render as checklists**: todo-shaped state (`[{content, status}]`) displays
+  with ✓/◐/○ markers instead of raw JSON, and state evolution shows each planning
+  update in order.
+- Framework-internal middleware spans (e.g. `TodoListMiddleware.after_model`) appear
+  italic-muted so the agent's real work stands out.
+- The canvas shows the compiled loop (agent ↔ tools) — an agent's *structure* lives in
+  its traces, not its topology; that's the nature of dynamic agents.
+
 ## More things the audit covered
 
 - **Concurrency & batch** — one tracer instance safely handles parallel `.invoke()`s:

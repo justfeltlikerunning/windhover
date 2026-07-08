@@ -330,6 +330,13 @@ window.pickDiff=async(id)=>{
 .msg .mrole{flex:none;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:2px;width:64px;text-align:right}
 .msg.user .mrole{color:var(--accent-text)} .msg.assistant .mrole{color:var(--chip-llm-t)} .msg.tool .mrole,.msg.system .mrole{color:var(--chip-tool-t)}
 .msg>div{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:5px 9px;white-space:pre-wrap;word-break:break-word;flex:1}
+.todos{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;display:flex;flex-direction:column;gap:4px}
+.todo{font-size:12.5px;display:flex;gap:8px;align-items:baseline}
+.todo .ti{font-family:var(--mono);color:var(--muted)}
+.todo.completed{color:var(--muted);text-decoration:line-through}
+.todo.completed .ti{color:var(--ok);text-decoration:none}
+.todo.in_progress .ti{color:var(--warn)}
+.tr-name.fw{color:var(--muted);font-weight:500;font-style:italic}
 
 /* ---------- modal (new run) ---------- */
 .modal{position:fixed;inset:0;display:grid;place-items:center;z-index:60;opacity:0;pointer-events:none;transition:.15s}
@@ -1008,7 +1015,7 @@ function renderSpans(list,byParent,total,depth){
       <div class="tr-row" onclick="tog('${did}',this)">
         <div class="tr-main"><span class="indent" style="width:${depth*18}px"></span>
           <span class="caret">▶</span><span class="chip ${s.type}">${s.type}</span>
-          <span class="tr-name ${s.status==='error'?'err':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}</div>
+          <span class="tr-name ${s.status==='error'?'err':''} ${/Middleware\./.test(s.name||'')?'fw':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}</div>
         <div class="tr-gantt"><div class="tr-bar ${s.type}" style="left:${left}%;width:${width}%"></div></div>
         <div class="tr-meta">${meta}</div>
       </div>
@@ -1024,6 +1031,9 @@ function renderSpans(list,byParent,total,depth){
   }).join('');
 }
 function isMsg(m){ return m&&typeof m==='object'&&typeof m.content!=='undefined'&&typeof (m.role||m.type)==='string'; }
+function isTodo(x){ return x&&typeof x==='object'&&typeof x.content==='string'&&typeof x.status==='string'; }
+function todoHtml(arr){ const ic={completed:'✓','in_progress':'◐',pending:'○'};
+  return `<div class="todos">${arr.map(t=>`<div class="todo ${esc(t.status)}"><span class="ti">${ic[t.status]||'○'}</span>${esc(t.content)}</div>`).join('')}</div>`; }
 function chatHtml(arr){ return `<div class="chat">${arr.map(m=>{
   const role=(m.role||m.type||'').replace('human','user').replace('ai','assistant');
   const body=typeof m.content==='string'?m.content:JSON.stringify(m.content);
@@ -1033,8 +1043,10 @@ function chatHtml(arr){ return `<div class="chat">${arr.map(m=>{
 function kv(k,v){
   const msgs=Array.isArray(v)&&v.length&&v.every(isMsg)?v
     :(v&&typeof v==='object'&&Array.isArray(v.messages)&&v.messages.length&&v.messages.every(isMsg)?v.messages:null);
+  const todos=Array.isArray(v)&&v.length&&v.every(isTodo)?v
+    :(v&&typeof v==='object'&&Array.isArray(v.todos)&&v.todos.length&&v.todos.every(isTodo)?v.todos:null);
   const txt=typeof v==='string'?v:JSON.stringify(v,null,2);
-  return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(${JSON.stringify(txt).replace(/"/g,'&quot;')});toast('Copied')">copy</button></div>${msgs?chatHtml(msgs):`<pre>${esc(txt)}</pre>`}</div>`; }
+  return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(${JSON.stringify(txt).replace(/"/g,'&quot;')});toast('Copied')">copy</button></div>${msgs?chatHtml(msgs):(todos?todoHtml(todos):`<pre>${esc(txt)}</pre>`)}</div>`; }
 window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
   el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
 window.replay=async(steps)=>{ closeAll(); switchView('graph');
