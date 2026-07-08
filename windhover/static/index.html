@@ -879,6 +879,7 @@ async function openNode(name){
         ${r.error?`<div class="kv"><div class="k">error</div><pre class="err">${esc(r.error)}</pre></div>`:''}
         ${r.input!=null?kv('input',r.input):''}
         ${r.output!=null?kv('output',r.output):''}
+        ${artChips(r.run_id,[r.input,r.output,kids.map(k=>k.output)])}
         ${kidHtml}
         ${(r.input==null&&r.output==null&&!kids.length&&!r.error)?'<div class="kv"><pre>no captured payload for this execution</pre></div>':''}
         <div style="margin:6px 0 10px"><button class="btn ghost" onclick="openRun('${r.run_id}')">Open full trace</button></div>
@@ -1396,6 +1397,33 @@ function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
 function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
 
 /* ---------- artifacts (files a run wrote) ---------- */
+/* client-side mirror of the server's detector — for making payloads actionable
+   wherever they render; the server allowlist still decides what actually serves */
+const ART_EXT={html:'html',htm:'html',pdf:'pdf',png:'image',jpg:'image',jpeg:'image',gif:'image',webp:'image',svg:'image',
+  py:'text',md:'text',txt:'text',json:'text',csv:'text',tsv:'text',log:'text',yaml:'text',yml:'text',toml:'text',xml:'text',sql:'text',
+  docx:'file',xlsx:'file',pptx:'file',doc:'file',xls:'file',zip:'file',parquet:'file',db:'file',sqlite:'file'};
+const ART_RE=new RegExp('^(?:\\/|~\\/|[A-Za-z]:[\\\\/])[^\\n\\r\\t*?<>|"\']{1,500}\\.('+Object.keys(ART_EXT).join('|')+')$','i');
+function artPaths(obj){
+  const out=[],seen=new Set();
+  (function walk(v){ if(out.length>=20)return;
+    if(typeof v==='string'){ const s=v.trim(); if(s.length<=500&&ART_RE.test(s)&&!seen.has(s)){seen.add(s);out.push(s);} }
+    else if(Array.isArray(v)) v.forEach(walk);
+    else if(v&&typeof v==='object') Object.values(v).forEach(walk);
+  })(obj);
+  return out;
+}
+function artChips(runId,obj){
+  const ps=artPaths(obj); if(!ps.length) return '';
+  const tok=whToken()?'&token='+encodeURIComponent(whToken()):'';
+  return `<div class="kv"><div class="k">artifacts</div></div>`+ps.map(p=>{
+    const name=p.split(/[\\/]/).pop(), ext=p.split('.').pop().toLowerCase(), kind=ART_EXT[ext]||'file';
+    return `<div class="artrow">
+      <span class="artkind ${kind}">${esc(ext)}</span>
+      <span class="artname mono" title="${esc(p)}">${esc(name)}</span>
+      ${kind!=='file'?`<button class="copy" onclick="event.stopPropagation();previewArt('${runId}','${encodeURIComponent(p)}','${kind}','${ext}','${esc(name)}')">preview</button>`:''}
+      <a class="copy" href="/api/runs/${runId}/artifact?path=${encodeURIComponent(p)}${tok}" download="${esc(name)}" onclick="event.stopPropagation()">download</a>
+    </div>`;}).join('');
+}
 function closeArt(){ const m=$('#art-modal'); m.classList.remove('on'); $('#art-body').innerHTML=''; }
 window.previewArt=async(runId,encPath,kind,ext,name)=>{
   const tok=whToken()?'&token='+encodeURIComponent(whToken()):'';

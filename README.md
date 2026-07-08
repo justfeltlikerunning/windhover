@@ -102,7 +102,7 @@ graph.invoke(input, config={
 - **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
   scopes all views (runs, sessions, stats included — metrics never mix graphs).
 - **Artifacts** — when a node's output records a file path (a report it wrote, a chart,
-  an export), the run drawer lists it: HTML/PDF/images/text/CSV/code preview inline
+  an export), the run drawer and the node pane both surface it: HTML/PDF/images/text/CSV/code preview inline
   (HTML sandboxed, scripts off), Word/Excel download with one click. Only paths recorded
   by that run's own outputs are servable — never arbitrary files — behind the same
   `/api` token gate.
