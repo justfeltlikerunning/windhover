@@ -870,6 +870,9 @@ function switchView(v){ VIEW=v;
   $('#crumb').textContent=v[0].toUpperCase()+v.slice(1);
   for(const k of ['graph','runs','sessions','memory','stats','fleet'])
     $('#view-'+k).style.display=v===k?'':'none';
+  // the graph selector scopes single-graph views — meaningless on the
+  // cross-graph fleet, so it steps aside there
+  const gp=$('#gpill'); if(gp) gp.style.display=v==='fleet'?'none':'';
   if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='memory')loadMemory();
   if(v==='stats'){loadStats();loadDatasets();}
   if(v==='fleet')loadFleet();
@@ -1354,7 +1357,10 @@ function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s 
 function _fleetSelect(graph){
   if(graph&&(window.__graphList||[]).includes(graph)&&GSEL!==graph){
     GSEL=graph; localStorage.setItem('wh-graph',GSEL);
-    const sel=$('#gsel'); if(sel) sel.value=graph;
+    // rebuild options rather than set .value — iOS Safari can leave the
+    // collapsed select showing the old label otherwise
+    const sel=$('#gsel');
+    if(sel) sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
     RF.graph=GSEL; const rg=$('#rgraph'); if(rg) rg.value=GSEL;
     loadGraph(true); probeMemory();
   }
