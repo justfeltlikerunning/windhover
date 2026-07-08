@@ -28,7 +28,22 @@ def grow(s):       time.sleep(.3);  return {"n": s["n"] * 3}
 def parity(s):     time.sleep(.4);  return {"notes": ["even" if s["n"] % 2 == 0 else "odd"]}
 def sign(s):       time.sleep(.25); return {"notes": ["positive" if s["n"] > 0 else "non-positive"]}
 def magnitude(s):  time.sleep(.35); return {"notes": ["big" if abs(s["n"]) > 100 else "small"]}
-def summarize(s):  time.sleep(.2);  return {"notes": [f"n={s['n']}: " + ", ".join(s["notes"])]}
+def summarize(s):
+    time.sleep(.1)
+    try:  # progress + custom events + long-term memory, all observable in Windhover
+        from langgraph.config import get_stream_writer, get_store
+        writer = get_stream_writer()
+        writer({"stage": "summarize", "pct": 50})
+        from langchain_core.callbacks import dispatch_custom_event
+        dispatch_custom_event("summary-ready", {"n": s["n"], "parts": len(s["notes"])})
+        store = get_store()
+        if store is not None:
+            store.put(("demo", "summaries"), f"n-{s['n']}",
+                      {"n": s["n"], "notes": s["notes"]})
+    except Exception:
+        pass
+    time.sleep(.1)
+    return {"notes": [f"n={s['n']}: " + ", ".join(s["notes"])]}
 
 
 _g = StateGraph(State)
@@ -45,8 +60,9 @@ _g.add_edge("sign", "summarize")
 _g.add_edge("magnitude", "summarize")
 _g.add_edge("summarize", END)
 
-try:  # checkpointer makes the Time-travel view demoable; optional dependency surface
+try:  # checkpointer + store make Time-travel and Memory demoable
     from langgraph.checkpoint.memory import MemorySaver
-    graph = _g.compile(checkpointer=MemorySaver())
+    from langgraph.store.memory import InMemoryStore
+    graph = _g.compile(checkpointer=MemorySaver(), store=InMemoryStore())
 except Exception:
     graph = _g.compile()

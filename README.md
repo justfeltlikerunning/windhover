@@ -71,7 +71,14 @@ graph.invoke(input, config={
   status/tag/session filters, bookmarks, pagination, CSV/JSON export.
 - **Sessions** — group runs into threads/batches; roll-up tokens, cost, errors.
 - **Scores** — attach numeric evals to runs (API or UI): eval harnesses, LLM-as-judge, human review.
-- **Live tail** — open a running run and watch its spans arrive in real time.
+- **Live tail** — open a running run and watch its spans arrive in real time; nodes can push
+  progress via LangGraph's `get_stream_writer()`.
+- **Custom events** — `dispatch_custom_event("name", {...})` anywhere in your app lands as an
+  event marker in the trace, parented to the node that fired it.
+- **Retries + TTFT** — tenacity retries badge the span (`↻2`); streaming LLM calls record
+  time-to-first-token; cache-read / reasoning token details show on the model line.
+- **Memory browser** — graphs compiled with a LangGraph `Store` get a Memory view: browse
+  namespaces and search long-term memory items.
 - **Time-travel** — checkpointed graphs get a per-thread checkpoint browser: state, writes,
   and next-nodes at every superstep (`get_state_history`).
 - **Run diff** — compare any two runs node-by-node: identical vs differing outputs,

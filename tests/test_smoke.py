@@ -299,6 +299,67 @@ def test_datasets_and_scoring():
     print("datasets + scoring OK")
 
 
+def test_ttft_retry_custom_event_usage_detail():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="deep")
+    tr.on_chain_start({}, {"q": 1}, run_id="root", parent_run_id=None)
+    tr.on_chat_model_start({"kwargs": {"model": "gpt-4o"}}, [[]],
+                           run_id="llm1", parent_run_id="root")
+    time.sleep(0.02)
+    tr.on_llm_new_token("Hel", run_id="llm1")          # -> ttft stamped
+    tr.on_llm_new_token("lo", run_id="llm1")           # ignored (only first counts)
+
+    class RS:  # tenacity RetryCallState stand-in
+        attempt_number = 3
+    tr.on_retry(RS(), run_id="llm1")
+
+    class Msg:
+        content = "Hello"
+        usage_metadata = {"input_tokens": 900, "output_tokens": 40,
+                          "input_token_details": {"cache_read": 700},
+                          "output_token_details": {"reasoning": 12}}
+    class Gen:
+        text = "Hello"; message = Msg()
+    class Resp:
+        llm_output = None; generations = [[Gen()]]
+    tr.on_llm_end(Resp(), run_id="llm1")
+    tr.on_custom_event("checkpoint-saved", {"rows": 42}, run_id="root")
+    tr.on_chain_end({}, run_id="root")
+
+    d = s.run_detail(tr.run_id)
+    llm = [x for x in d["spans"] if x["type"] == "llm"][0]
+    assert llm["ttft_ms"] is not None and llm["ttft_ms"] >= 15
+    assert llm["retries"] == 3
+    assert llm["usage_detail"] == {"input_cache_read": 700, "output_reasoning": 12}
+    assert llm["prompt_tokens"] == 900
+    ev = [x for x in d["spans"] if x["type"] == "event"]
+    assert ev and ev[0]["name"] == "checkpoint-saved" and ev[0]["output"] == {"rows": 42}
+    print("ttft/retry/custom-event/usage-detail OK")
+
+
+def test_demo_memory_and_events_end_to_end():
+    """Demo graph writes long-term memory + dispatches a custom event — both
+    must be observable."""
+    import importlib
+    import windhover.demo_graph as dg
+    importlib.reload(dg)  # fresh InMemoryStore per test
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="demo")
+    dg.graph.invoke({"n": 7}, config={"callbacks": [tr],
+                                      "configurable": {"thread_id": "mem-t"}})
+    time.sleep(.1)
+    d = s.run_detail(tr.run_id)
+    ev = [x for x in d["spans"] if x["type"] == "event"]
+    assert ev and ev[0]["name"] == "summary-ready", [x["type"] for x in d["spans"]]
+    assert dg.graph.store is not None
+    items = dg.graph.store.search(("demo", "summaries"))
+    assert items and items[0].value["n"] == 21   # n=7 -> grow x3
+    assert ("demo", "summaries") in dg.graph.store.list_namespaces()
+    print("demo memory + custom event end-to-end OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -314,4 +375,6 @@ if __name__ == "__main__":
     test_auth_check()
     test_thread_capture_and_history()
     test_datasets_and_scoring()
+    test_ttft_retry_custom_event_usage_detail()
+    test_demo_memory_and_events_end_to_end()
     print("ALL SMOKE TESTS PASSED")

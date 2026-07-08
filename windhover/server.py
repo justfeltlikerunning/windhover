@@ -186,9 +186,13 @@ async def api_run(request: Request):
     def worker():
         try:
             interrupted = False
-            for update in graph.stream(payload, config=config,
-                                       stream_mode="updates"):
-                for node in update:
+            for mode, chunk in graph.stream(payload, config=config,
+                                            stream_mode=["updates", "custom"]):
+                if mode == "custom":
+                    # get_stream_writer() output from inside a node -> live progress
+                    q.put(("progress", {"data": _trunc(chunk, 600)}))
+                    continue
+                for node in chunk:
                     if node == "__interrupt__":
                         interrupted = True
                         q.put(("interrupt", {"run_id": run_id}))
@@ -338,6 +342,36 @@ def api_thread_history(thread_id: str, limit: int = 80):
     except Exception as e:
         return JSONResponse({"error": str(e)}, 500)
     return JSONResponse({"thread_id": thread_id, "steps": steps})
+
+
+@app.get("/api/memory/namespaces")
+def api_memory_namespaces():
+    """LangGraph long-term memory (Store) browser — namespaces."""
+    st = getattr(graph, "store", None) if graph is not None else None
+    if st is None:
+        return JSONResponse({"error": "no local graph with a store"}, 404)
+    try:
+        return JSONResponse({"namespaces": [list(ns) for ns in st.list_namespaces()]})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
+
+
+@app.get("/api/memory/items")
+def api_memory_items(namespace: str, query: str = None, limit: int = 50):
+    """Items in one namespace (dot-separated); optional semantic/text query."""
+    st = getattr(graph, "store", None) if graph is not None else None
+    if st is None:
+        return JSONResponse({"error": "no local graph with a store"}, 404)
+    try:
+        ns = tuple(namespace.split(".")) if namespace else ()
+        items = st.search(ns, query=query, limit=max(1, min(limit, 200)))
+        return JSONResponse({"namespace": namespace, "items": [
+            {"key": i.key, "value": _trunc(i.value, 3000),
+             "created_at": str(getattr(i, "created_at", "") or "") or None,
+             "updated_at": str(getattr(i, "updated_at", "") or "") or None,
+             "score": getattr(i, "score", None)} for i in items]})
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, 500)
 
 
 @app.get("/api/datasets")

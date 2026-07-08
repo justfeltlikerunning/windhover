@@ -77,24 +77,31 @@ def _model_name(serialized: dict, kw: dict) -> str:
     return ids[-1] if ids else "llm"
 
 
-def _usage(response: Any) -> tuple[Optional[int], Optional[int]]:
+def _usage(response: Any) -> tuple[Optional[int], Optional[int], Optional[dict]]:
+    """(prompt, completion, detail) — detail carries cache_read/cache_creation/
+    reasoning token counts when the provider reports them."""
     # OpenAI-style aggregate
     out = getattr(response, "llm_output", None) or {}
     for key in ("token_usage", "usage"):
         u = out.get(key) if isinstance(out, dict) else None
         if u:
             return (u.get("prompt_tokens") or u.get("input_tokens"),
-                    u.get("completion_tokens") or u.get("output_tokens"))
+                    u.get("completion_tokens") or u.get("output_tokens"), None)
     # per-generation usage_metadata (chat models)
     try:
         for gens in response.generations:
             for g in gens:
                 um = getattr(getattr(g, "message", None), "usage_metadata", None)
                 if um:
-                    return um.get("input_tokens"), um.get("output_tokens")
+                    detail = {}
+                    for side in ("input_token_details", "output_token_details"):
+                        for k, v in (um.get(side) or {}).items():
+                            if v:
+                                detail[f"{side.split('_')[0]}_{k}"] = v
+                    return um.get("input_tokens"), um.get("output_tokens"), detail or None
     except Exception:
         pass
-    return None, None
+    return None, None, None
 
 
 def _gen_text(response: Any) -> str:
@@ -142,7 +149,7 @@ class SpanBuilder(BaseCallbackHandler):
         return int((t - (self._t0 or t)) * 1000)
 
     def _finish_span(self, info: dict, *, output=None, status="ok", error=None,
-                     model=None, pt=None, ct=None):
+                     model=None, pt=None, ct=None, usage_detail=None):
         now = time.time()
         sid = info["span_id"]
         self._emit({"kind": "span", "id": sid, "run_id": self.run_id,
@@ -153,7 +160,10 @@ class SpanBuilder(BaseCallbackHandler):
                     "dur_ms": int((now - info["t"]) * 1000),
                     "input": info.get("input"), "output": output, "model": model,
                     "prompt_tokens": pt, "completion_tokens": ct,
-                    "cost_usd": cost_of(model, pt, ct), "error": error})
+                    "cost_usd": cost_of(model, pt, ct), "error": error,
+                    "retries": info.get("retries"),
+                    "ttft_ms": int(info["ttft"] * 1000) if info.get("ttft") is not None else None,
+                    "usage_detail": usage_detail})
         self._seq += 1
 
     # -- chains / nodes --
@@ -235,14 +245,40 @@ class SpanBuilder(BaseCallbackHandler):
         info = self._open.pop(run_id, None)
         if not info:
             return
-        pt, ct = _usage(response)
+        pt, ct, detail = _usage(response)
         self._finish_span(info, output=_gen_text(response)[:4000],
-                          model=info["name"], pt=pt, ct=ct)
+                          model=info["name"], pt=pt, ct=ct, usage_detail=detail)
 
     def on_llm_error(self, error, *, run_id=None, **kw):
         info = self._open.pop(run_id, None)
         if info:
             self._finish_span(info, status="error", error=_err_text(error), model=info["name"])
+
+    def on_llm_new_token(self, token, *, run_id=None, **kw):
+        # streaming: first token stamps time-to-first-token
+        info = self._open.get(run_id)
+        if info is not None and "ttft" not in info:
+            info["ttft"] = time.time() - info["t"]
+
+    # -- retries (tenacity, e.g. rate limits) --
+    def on_retry(self, retry_state, *, run_id=None, **kw):
+        info = self._open.get(run_id)
+        if info is not None:
+            info["retries"] = getattr(retry_state, "attempt_number", None) or \
+                              (info.get("retries") or 0) + 1
+
+    # -- custom events (langchain dispatch_custom_event) --
+    def on_custom_event(self, name, data, *, run_id=None, **kw):
+        now = time.time()
+        self._emit({"kind": "span", "id": uuid.uuid4().hex[:12], "run_id": self.run_id,
+                    "parent_id": self._span_of.get(run_id),
+                    "seq": self._seq, "type": "event", "name": str(name), "status": "ok",
+                    "started_ms": int(now * 1000), "ended_ms": int(now * 1000),
+                    "offset_ms": self._rel(now), "dur_ms": 0,
+                    "input": None, "output": _trunc(data), "model": None,
+                    "prompt_tokens": None, "completion_tokens": None,
+                    "cost_usd": None, "error": None})
+        self._seq += 1
 
     # -- retrievers (LangChain RAG) --
     def on_retriever_start(self, serialized, query, *, run_id=None, parent_run_id=None, **kw):

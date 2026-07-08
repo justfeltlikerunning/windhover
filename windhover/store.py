@@ -13,7 +13,7 @@ from __future__ import annotations
 import json, os, sqlite3, threading, time, uuid
 from typing import Any, Optional
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 _lock = threading.Lock()
 
 
@@ -68,6 +68,11 @@ class Store:
                 c.execute("ALTER TABLE runs ADD COLUMN bookmarked INTEGER DEFAULT 0")
             if "thread_id" not in cols:
                 c.execute("ALTER TABLE runs ADD COLUMN thread_id TEXT")
+            scols = [r[1] for r in c.execute("PRAGMA table_info(spans)").fetchall()]
+            for col, typ in (("retries", "INTEGER"), ("ttft_ms", "INTEGER"),
+                             ("usage_detail", "TEXT")):
+                if col not in scols:
+                    c.execute(f"ALTER TABLE spans ADD COLUMN {col} {typ}")
             try:
                 c.execute("SELECT count(*) FROM json_each('[1]')")
                 self.has_json1 = True
@@ -133,15 +138,18 @@ class Store:
         with _lock, self._conn() as c:
             c.execute("""INSERT OR REPLACE INTO spans
               (id,run_id,parent_id,seq,type,name,status,started_ms,ended_ms,offset_ms,
-               dur_ms,input,output,model,prompt_tokens,completion_tokens,cost_usd,error)
-              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+               dur_ms,input,output,model,prompt_tokens,completion_tokens,cost_usd,error,
+               retries,ttft_ms,usage_detail)
+              VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
               (s["id"], s["run_id"], s.get("parent_id"), s.get("seq", 0), s["type"],
                s.get("name"), s.get("status", "ok"), s.get("started_ms"), s.get("ended_ms"),
                s.get("offset_ms"), s.get("dur_ms"),
                json.dumps(s.get("input"), default=str) if s.get("input") is not None else None,
                json.dumps(s.get("output"), default=str) if s.get("output") is not None else None,
                s.get("model"), s.get("prompt_tokens"), s.get("completion_tokens"),
-               s.get("cost_usd"), s.get("error")))
+               s.get("cost_usd"), s.get("error"),
+               s.get("retries"), s.get("ttft_ms"),
+               json.dumps(s.get("usage_detail")) if s.get("usage_detail") else None))
             if self.has_fts:
                 c.execute("DELETE FROM span_fts WHERE span_id=?", (s["id"],))
                 c.execute("INSERT INTO span_fts(text,span_id,run_id) VALUES(?,?,?)",
@@ -316,7 +324,7 @@ class Store:
         for k in ("input", "tags"):
             d[k] = json.loads(d[k]) if d.get(k) else None
         for s in spans:
-            for k in ("input", "output"):
+            for k in ("input", "output", "usage_detail"):
                 s[k] = json.loads(s[k]) if s.get(k) else None
         d["spans"] = spans
         d["scores"] = scores

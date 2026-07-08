@@ -236,6 +236,7 @@ window.pickDiff=async(id)=>{
 .chip.tool{background:var(--chip-tool);color:var(--chip-tool-t)}
 .chip.retriever{background:var(--chip-ret);color:var(--chip-ret-t)}
 .chip.interrupt{background:var(--warn-weak);color:var(--warn)}
+.chip.event{background:var(--surface2);color:var(--text2);border:1px dashed var(--border2)}
 .tr-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .tr-name.err{color:var(--err)}
 .tr-gantt{height:6px;background:var(--surface2);border-radius:3px;position:relative;overflow:hidden}
@@ -347,6 +348,8 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
 .tr-bar.tool{background:var(--chip-tool-t)}
 .tr-bar.retriever{background:var(--chip-ret-t)}
 .tr-bar.interrupt{background:var(--warn)}
+.tr-bar.event{background:var(--border2)}
+.badge-retry{font-family:var(--mono);font-size:10px;color:var(--warn);background:var(--warn-weak);border-radius:5px;padding:1px 6px;margin-left:6px}
 .charts .card:nth-child(2) .cbar{background:var(--chip-llm-t)}
 #cy{background:radial-gradient(circle,var(--border) 1px,transparent 1.5px) 0 0/24px 24px}
 .legend{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase}
@@ -390,9 +393,10 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
       <button data-v="graph" class="on">${ICON.graph} Graph</button>
       <button data-v="runs">${ICON.list} Runs</button>
       <button data-v="sessions">${ICON.layers} Sessions</button>
+      <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
       <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.8</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><span class="mono" id="ver">v0.9</span></div>
   </aside>
 
   <main>
@@ -444,6 +448,16 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
           <div class="card"><div id="sess-wrap"><div class="empty">Loading…</div></div></div>
         </div>
       </div>
+      <div id="view-memory" style="display:none">
+        <div class="page">
+          <div class="page-head"><h1>Memory</h1><span class="sub">LangGraph long-term store</span></div>
+          <div class="rtools">
+            <select id="mem-ns"></select>
+            <input type="search" id="mem-q" placeholder="Search this namespace…">
+          </div>
+          <div class="card"><div id="mem-wrap"><div class="empty">Loading…</div></div></div>
+        </div>
+      </div>
       <div id="view-stats" style="display:none">
         <div class="page">
           <div class="page-head"><h1>Stats</h1><span class="sub">all recorded runs</span></div>
@@ -458,6 +472,7 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
   <button data-v="graph" class="on">${ICON.graph}<span>Graph</span></button>
   <button data-v="runs">${ICON.list}<span>Runs</span></button>
   <button data-v="sessions">${ICON.layers}<span>Sessions</span></button>
+  <button data-v="memory" class="nav-mem" style="display:none">${ICON.mem}<span>Memory</span></button>
   <button data-v="stats">${ICON.chart}<span>Stats</span></button>
 </div>
 
@@ -497,6 +512,7 @@ const ICON = {
   list:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4" cy="18" r="1.1" fill="currentColor" stroke="none"/></svg>',
   chart:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20V9M10 20V4M16 20v-7M21 20H3"/></svg>',
   layers:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3 3 8l9 5 9-5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>',
+  mem:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><ellipse cx="12" cy="5.5" rx="7.5" ry="2.8"/><path d="M4.5 5.5v6c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8v-6"/><path d="M4.5 11.5v6c0 1.6 3.4 2.8 7.5 2.8s7.5-1.2 7.5-2.8v-6"/></svg>',
   play:'<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M7 4.8v14.4c0 .8.9 1.3 1.6.9l11-7.2c.6-.4.6-1.4 0-1.8l-11-7.2c-.7-.4-1.6.1-1.6.9z"/></svg>',
   moon:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 13.5A8 8 0 1 1 10.5 4 6.5 6.5 0 0 0 20 13.5z"/></svg>',
   x:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
@@ -673,9 +689,10 @@ function switchView(v){ VIEW=v;
   if(location.hash!=='#'+v) history.replaceState(null,'','#'+v);
   $$('.nav button,.bottom-nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   $('#crumb').textContent=v[0].toUpperCase()+v.slice(1);
-  for(const k of ['graph','runs','sessions','stats'])
+  for(const k of ['graph','runs','sessions','memory','stats'])
     $('#view-'+k).style.display=v===k?'':'none';
-  if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='stats'){loadStats();loadDatasets();}
+  if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='memory')loadMemory();
+  if(v==='stats'){loadStats();loadDatasets();}
   if(cy&&v==='graph')setTimeout(()=>cy.resize(),40);
 }
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
@@ -700,6 +717,7 @@ async function runNow(input){
       for(const p of ps){ const ev=(p.match(/event: (.*)/)||[])[1],dm=(p.match(/data: (.*)/s)||[])[1]; if(!ev)continue; const d=dm?JSON.parse(dm):{};
         if(ev==='node'){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id(d.node).addClass('running');
           cy.edges(`[source="${prev}"][target="${d.node}"]`).addClass('flow'); prev=d.node; }
+        else if(ev==='progress'){ toast('progress: '+JSON.stringify(d.data).slice(0,120)); }
         else if(ev==='interrupt'){ toast('Run paused at an interrupt — awaiting resume'); }
         else if(ev==='interrupted'){ cy.$id(prev).addClass('running'); toast('Run interrupted — see Runs for the payload'); }
         else if(ev==='done'){ cy.$id(prev).addClass('done').removeClass('running'); cy.$id('__end__').addClass('done'); toast('Run complete — saved to Runs'); }
@@ -843,6 +861,7 @@ function renderSpans(list,byParent,total,depth){
     const kids=byParent[s.id]||[];
     const left=((s.offset_ms||0)/total*100).toFixed(2), width=Math.max(1.2,(s.dur_ms||0)/total*100).toFixed(2);
     const meta=[s.dur_ms!=null?s.dur_ms+'ms':null,
+      s.ttft_ms!=null?'ttft '+s.ttft_ms+'ms':null,
       s.type==='llm'&&(s.prompt_tokens!=null||s.completion_tokens!=null)?fmtk((s.prompt_tokens||0)+(s.completion_tokens||0))+'t':null,
       s.cost_usd!=null?'$'+s.cost_usd.toFixed(4):null].filter(Boolean).join(' · ');
     const did='sp'+s.id;
@@ -850,12 +869,12 @@ function renderSpans(list,byParent,total,depth){
       <div class="tr-row" onclick="tog('${did}',this)">
         <div class="tr-main"><span class="indent" style="width:${depth*18}px"></span>
           <span class="caret">▶</span><span class="chip ${s.type}">${s.type}</span>
-          <span class="tr-name ${s.status==='error'?'err':''}">${esc(s.name||s.type)}</span></div>
+          <span class="tr-name ${s.status==='error'?'err':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}</div>
         <div class="tr-gantt"><div class="tr-bar ${s.type}" style="left:${left}%;width:${width}%"></div></div>
         <div class="tr-meta">${meta}</div>
       </div>
       <div class="tr-detail" id="${did}">
-        ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}</pre></div>`:''}
+        ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}${s.usage_detail?'  ·  '+esc(Object.entries(s.usage_detail).map(([k,v])=>`${v} ${k.replace('input_','').replace('output_','')}`).join(', ')):''}</pre></div>`:''}
         ${s.error?`<div class="kv"><div class="k">error${s.type==='node'?`<button class="copy" onclick="showSpanSource('${s.id}')">view source</button>`:''}</div><pre class="err">${esc(s.error)}</pre><div id="src-${s.id}"></div></div>`:''}
         ${s.input!=null?kv('input',s.input):''}
         ${s.output!=null?kv('output',s.output):''}
@@ -1009,6 +1028,37 @@ function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
 function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s ago'; if(s<3600)return Math.round(s/60)+'m ago'; if(s<86400)return Math.round(s/3600)+'h ago'; return Math.round(s/86400)+'d ago'; }
 let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),2600); }
 
+let MEM_NS=[];
+async function probeMemory(){
+  try{ const r=await fetch('/api/memory/namespaces'); if(!r.ok) return;
+    MEM_NS=(await r.json()).namespaces||[];
+    document.getElementById('nav-mem').style.display='';
+    const m=document.querySelector('.bottom-nav .nav-mem'); if(m)m.style.display='';
+  }catch(e){}
+}
+async function loadMemory(){
+  const sel=document.getElementById('mem-ns');
+  try{ const r=await fetch('/api/memory/namespaces'); MEM_NS=(await r.json()).namespaces||[]; }catch(e){}
+  const cur=sel.value;
+  sel.innerHTML=MEM_NS.map(ns=>`<option value="${esc(ns.join('.'))}">${esc(ns.join(' / '))}</option>`).join('');
+  if(cur) sel.value=cur;
+  const ns=sel.value;
+  const w=document.getElementById('mem-wrap');
+  if(!ns){ w.innerHTML='<div class="empty"><div class="t">No memories yet</div>Nodes write with <span class="mono">get_store().put(namespace, key, value)</span> — items appear here.</div>'; return; }
+  const q=document.getElementById('mem-q').value.trim();
+  const p=new URLSearchParams({namespace:ns}); if(q)p.set('query',q);
+  let d={items:[]}; try{ d=await(await fetch('/api/memory/items?'+p)).json(); }catch(e){}
+  w.innerHTML=(d.items||[]).length?`<div style="overflow:auto"><table>
+    <thead><tr><th>Key</th><th>Value</th><th class="r">Updated</th></tr></thead>
+    <tbody>${d.items.map(i=>`<tr>
+      <td class="mono" style="font-weight:600;white-space:nowrap">${esc(i.key)}</td>
+      <td><pre style="margin:0;white-space:pre-wrap;word-break:break-word;font:12px/1.5 var(--mono);max-width:640px">${esc(JSON.stringify(i.value,null,1)).slice(0,600)}</pre></td>
+      <td class="r" style="color:var(--muted);white-space:nowrap">${i.updated_at?esc(String(i.updated_at).slice(0,19).replace('T',' ')):'—'}</td></tr>`).join('')}</tbody></table></div>`
+    :'<div class="empty">Nothing in this namespace'+(q?' matching that query':'')+'.</div>';
+}
+document.addEventListener('change',e=>{ if(e.target&&e.target.id==='mem-ns') loadMemory(); });
+let memQT; document.addEventListener('input',e=>{ if(e.target&&e.target.id==='mem-q'){ clearTimeout(memQT); memQT=setTimeout(loadMemory,300); } });
+
 async function loadDatasets(){
   const w=document.getElementById('ds-wrap'); if(!w) return;
   let ds=[]; try{ ds=await(await fetch('/api/datasets')).json(); }catch(e){}
@@ -1027,7 +1077,7 @@ window.runDataset=async(id,name)=>{
   toast('Eval started: '+d.items+' items → session '+d.session);
 };
 window.delDataset=async(id)=>{ await fetch('/api/datasets/'+id,{method:'DELETE'}); loadDatasets(); };
-loadGraph(); liveTopology();
+loadGraph(); liveTopology(); probeMemory();
 /* deep links: #runs #sessions #stats #run=<id> */
 (function(){ const h=location.hash.slice(1);
   if(h==='runs'||h==='sessions'||h==='stats') switchView(h);
