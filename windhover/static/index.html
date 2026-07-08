@@ -184,6 +184,7 @@ window.editState=async(tid,cid,valuesJson)=>{
 
 /* ---------- time-travel (checkpoint history) ---------- */
 window.showHistory=async(tid)=>{
+  clearTimeout(window.__liveT);
   let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history?'+rgparam());
     d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
   const steps=d.steps||[];
@@ -218,6 +219,7 @@ window.showHistory=async(tid)=>{
 window.pickDiff=async(id)=>{
   if(!window.__diffA||window.__diffA===id){ window.__diffA=id; toast('Compare: pick a second run (open it, hit compare)'); return; }
   const a=window.__diffA; window.__diffA=null;
+  clearTimeout(window.__liveT);
   const [ra,rb]=await Promise.all([fetch('/api/runs/'+a).then(r=>r.json()),
                                    fetch('/api/runs/'+id).then(r=>r.json())]);
   const tops=r=>r.spans.filter(s=>!s.parent_id&&s.type==='node');
@@ -727,6 +729,7 @@ function codeBlock(src,hi){ const lines=src.code.replace(/\n$/,'').split('\n');
 
 /* ---------- node pane (tap a node on the graph) ---------- */
 async function openNode(name){
+  clearTimeout(window.__liveT); window.__run=null;
   let d={}; try{ d=await(await fetch('/api/nodes/'+encodeURIComponent(name))).json(); }catch(e){}
   let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source?'+gparam(''));
     if(rs.ok) src=await rs.json(); }catch(e){}
@@ -1106,6 +1109,7 @@ window.editState=async(tid,cid,valuesJson)=>{
 
 /* ---------- time-travel (checkpoint history) ---------- */
 window.showHistory=async(tid)=>{
+  clearTimeout(window.__liveT);
   let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history?'+rgparam());
     d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
   const steps=d.steps||[];
@@ -1140,6 +1144,7 @@ window.showHistory=async(tid)=>{
 window.pickDiff=async(id)=>{
   if(!window.__diffA||window.__diffA===id){ window.__diffA=id; toast('Compare: pick a second run (open it, hit compare)'); return; }
   const a=window.__diffA; window.__diffA=null;
+  clearTimeout(window.__liveT);
   const [ra,rb]=await Promise.all([fetch('/api/runs/'+a).then(r=>r.json()),
                                    fetch('/api/runs/'+id).then(r=>r.json())]);
   const tops=r=>r.spans.filter(s=>!s.parent_id&&s.type==='node');
@@ -1225,7 +1230,7 @@ async function loadStats(){
 }
 
 /* ---------- misc ---------- */
-function closeAll(){ $('#scrim').classList.remove('on'); $('#drawer').classList.remove('on'); $('#modal').classList.remove('on'); }
+function closeAll(){ clearTimeout(window.__liveT); $('#scrim').classList.remove('on'); $('#drawer').classList.remove('on'); $('#modal').classList.remove('on'); }
 function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function fmtms(ms){ return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s'; }
 function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }

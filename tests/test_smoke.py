@@ -632,6 +632,63 @@ def test_nonblocking_sink_and_webhook_hook():
     print("non-blocking sink + webhook hook OK")
 
 
+def test_fork_not_marked_interrupted():
+    """Pending-next check must query by thread only — a config carrying
+    checkpoint_id reads the historical checkpoint and falsely flags forks."""
+    os.environ.setdefault("WINDHOVER_DB", tempfile.mktemp(suffix=".db"))
+    from windhover.server import _pending_next
+    from typing import TypedDict
+    from langgraph.graph import StateGraph, START, END
+    from langgraph.checkpoint.memory import MemorySaver
+
+    class St(TypedDict):
+        x: int
+    g = StateGraph(St)
+    g.add_node("inc", lambda st: {"x": st["x"] + 1})
+    g.add_node("mul", lambda st: {"x": st["x"] * 10})
+    g.add_edge(START, "inc"); g.add_edge("inc", "mul"); g.add_edge("mul", END)
+    app = g.compile(checkpointer=MemorySaver())
+    cfgc = {"configurable": {"thread_id": "fork-t"}}
+    app.invoke({"x": 1}, config=cfgc)                       # completes
+    hist = list(app.get_state_history(cfgc))
+    early = next(s for s in hist if s.next)                 # historical, pending
+    cid = early.config["configurable"]["checkpoint_id"]
+    fork_cfg = {"configurable": {"thread_id": "fork-t", "checkpoint_id": cid}}
+    assert app.get_state(fork_cfg).next, "sanity: historical checkpoint has next"
+    assert _pending_next(app, fork_cfg) == [], "must ignore checkpoint_id"
+    print("fork-not-interrupted OK")
+
+
+def test_score_rejects_nonfinite():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    s.open_run({"id": "sf1", "graph": "g", "started_ms": 1})
+    s.close_run("sf1", "done", 2)
+    assert s.add_score("sf1", "ok", 0.5) is not None
+    assert s.add_score("sf1", "bad", float("inf")) is None
+    assert s.add_score("sf1", "bad", float("nan")) is None
+    # the runs API payload must stay JSON-parseable
+    import json as _json
+    _json.loads(_json.dumps(s.runs()["runs"][0], allow_nan=False))
+    print("non-finite score rejection OK")
+
+
+def test_tracer_cleanup_no_leak():
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    tr = SpanBuilder(db_sink(s), run_name="leak")
+    for i in range(20):
+        tr.on_chain_start({}, {"i": i}, run_id=f"r{i}", parent_run_id=None)
+        tr.on_chain_start({}, {}, run_id=f"n{i}", parent_run_id=f"r{i}",
+                          metadata={"langgraph_node": "w"})
+        tr.on_chain_end({}, run_id=f"n{i}")
+        tr.on_chain_end({}, run_id=f"r{i}")
+    assert s.runs(limit=100)["total"] == 20
+    assert not tr._runs and not tr._root_of and not tr._span_of and not tr._open, (
+        len(tr._runs), len(tr._root_of), len(tr._span_of), len(tr._open))
+    print("tracer cleanup (no leak) OK")
+
+
 if __name__ == "__main__":
     test_cost(); print("cost OK")
     test_store_roundtrip()
@@ -660,4 +717,7 @@ if __name__ == "__main__":
     test_env_multi_graph_parsing()
     test_graph_scoped_stats_and_sessions()
     test_nonblocking_sink_and_webhook_hook()
+    test_fork_not_marked_interrupted()
+    test_score_rejects_nonfinite()
+    test_tracer_cleanup_no_leak()
     print("ALL SMOKE TESTS PASSED")

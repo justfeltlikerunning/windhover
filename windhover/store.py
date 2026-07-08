@@ -195,6 +195,9 @@ class Store:
 
     def add_score(self, run_id: str, name: str, value: float,
                   comment: Optional[str] = None, source: str = "api") -> Optional[dict]:
+        import math
+        if not math.isfinite(float(value)):
+            return None  # NaN/Infinity would render the runs API unparseable
         with _lock, self._conn() as c:
             if not c.execute("SELECT 1 FROM runs WHERE id=?", (run_id,)).fetchone():
                 return None

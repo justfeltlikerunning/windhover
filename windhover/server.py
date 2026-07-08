@@ -230,6 +230,20 @@ def _sse(ev: str, data: dict) -> str:
     return f"event: {ev}\ndata: {json.dumps(data)}\n\n"
 
 
+def _pending_next(gr, config) -> list:
+    """Nodes still pending on the LATEST checkpoint of this thread. Must query
+    by thread only — carrying a checkpoint_id (fork/resume-from) would read the
+    HISTORICAL checkpoint, whose next-nodes are always non-empty."""
+    try:
+        thread_id = (config.get("configurable") or {}).get("thread_id")
+        if not thread_id:
+            return []
+        st = gr.get_state({"configurable": {"thread_id": thread_id}})
+        return list(st.next or [])
+    except Exception:
+        return []
+
+
 def _stream_execution(gr, graph_input, config, tracer, stream_kwargs=None):
     """Shared SSE executor for /api/run and /api/threads/…/resume. Detects both
     dynamic interrupts (__interrupt__ updates) and static breakpoints (stream
@@ -272,17 +286,17 @@ def _stream_execution(gr, graph_input, config, tracer, stream_kwargs=None):
                         seq_extra[0] += 1
                     q.put(("node", {"node": node, "cached": cached or None}))
             if not interrupted and getattr(gr, "checkpointer", None) is not None:
-                try:  # static breakpoint: stream ended but nodes are pending
-                    st = gr.get_state(config)
-                    if st.next:
-                        interrupted = True
-                        q.put(("interrupt", {"run_id": run_id,
-                                             "next": list(st.next)}))
-                except Exception:
-                    pass
+                nxt = _pending_next(gr, config)
+                if nxt:
+                    interrupted = True
+                    q.put(("interrupt", {"run_id": run_id, "next": nxt}))
             if interrupted:
-                # tracer closed the run as done on root end; correct it
-                store.close_run(run_id, "interrupted", int(time.time() * 1000))
+                # correct the status ONLY if the tracer didn't already mark it
+                # (dynamic interrupts close as interrupted themselves — a second
+                # close here would double-fire the webhook)
+                row = store.run_detail(run_id)
+                if row and row.get("status") != "interrupted":
+                    store.close_run(run_id, "interrupted", int(time.time() * 1000))
             q.put(("interrupted" if interrupted else "done", {"run_id": run_id}))
         except Exception as e:
             # tracer already recorded the error span/close; surface to the client too
@@ -307,6 +321,17 @@ async def api_run(request: Request):
         payload = await request.json()
     except Exception:
         payload = {}
+    if not isinstance(payload, dict):
+        # non-dict graph inputs (e.g. functional-API entrypoints taking a
+        # scalar) carry no _directives — run them as-is on the default graph
+        gr = _graph_for(_default_name())
+        if gr is None:
+            return JSONResponse({"error": "no local graph"}, 400)
+        tracer = SpanBuilder(db_sink(store), run_name=_default_name())
+        config = {"callbacks": [tracer]}
+        if getattr(gr, "checkpointer", None) is not None:
+            config["configurable"] = {"thread_id": tracer.run_id}
+        return _stream_execution(gr, payload, config, tracer)
     gname = payload.pop("_graph", None) or _default_name()
     gr = _graph_for(gname)
     if gr is None:
@@ -441,8 +466,10 @@ async def api_score_add(request: Request, run_id: str):
         name, value = str(body["name"]).strip(), float(body["value"])
     except (KeyError, TypeError, ValueError):
         return JSONResponse({"error": "requires name (str) and value (number)"}, 400)
-    if not name:
-        return JSONResponse({"error": "name must be non-empty"}, 400)
+    import math
+    if not name or not math.isfinite(value):
+        return JSONResponse({"error": "name must be non-empty and value finite "
+                            "(NaN/Infinity would corrupt API JSON)"}, 400)
     sc = store.add_score(run_id, name, value, comment=body.get("comment"),
                          source=body.get("source", "api"))
     return JSONResponse(sc) if sc else JSONResponse({"error": "run not found"}, 404)

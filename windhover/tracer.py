@@ -151,6 +151,7 @@ class SpanBuilder(BaseCallbackHandler):
         self.session = session
         self.tags = tags
         self.run_id = uuid.uuid4().hex[:12]     # id of the FIRST run this tracer opens
+        self._closed = 0                         # runs completed (cleanup bookkeeping)
         self._runs: dict = {}                    # lc root id -> run ctx
         self._root_of: dict = {}                 # lc run id -> lc root id
         self._open: dict = {}                    # lc run id -> pending span info
@@ -171,7 +172,10 @@ class SpanBuilder(BaseCallbackHandler):
         if root is None:
             root = self._root_of.get(run_id) or (run_id if parent_run_id is None else parent_run_id)
         self._root_of[run_id] = root
-        return root, self._runs.get(root)
+        ctx = self._runs.get(root)
+        if ctx is not None:
+            ctx["members"].add(run_id)
+        return root, ctx
 
     def _open_ctx(self, root, inputs, metadata=None, lc_tags=None):
         md = metadata or {}
@@ -181,8 +185,8 @@ class SpanBuilder(BaseCallbackHandler):
                      if not str(t).startswith(self._INTERNAL_TAG_PREFIXES)]
         extra = md.get("windhover_tags") or []
         tags = list(dict.fromkeys([*(self.tags or []), *map(str, extra), *map(str, user_tags)])) or None
-        ctx = {"id": self.run_id if not self._runs else uuid.uuid4().hex[:12],
-               "t0": time.time(), "seq": 0, "interrupted": False}
+        ctx = {"id": self.run_id if not self._closed and not self._runs else uuid.uuid4().hex[:12],
+               "t0": time.time(), "seq": 0, "interrupted": False, "members": {root}}
         self._runs[root] = ctx
         self._emit({"kind": "run_open", "run_id": ctx["id"], "graph": name,
                     "input": _trunc(inputs), "started_ms": int(ctx["t0"] * 1000),
@@ -229,11 +233,17 @@ class SpanBuilder(BaseCallbackHandler):
         ctx["seq"] += 1
 
     def _close_ctx(self, root, status, error=None):
-        ctx = self._runs.get(root)
+        ctx = self._runs.pop(root, None)
         if ctx is None:
             return
         self._emit({"kind": "run_close", "run_id": ctx["id"], "status": status,
                     "ended_ms": int(time.time() * 1000), "error": error})
+        # long-lived tracers (production apps) must not grow without bound
+        self._closed += 1
+        for m in ctx.get("members", ()):
+            self._root_of.pop(m, None)
+            self._span_of.pop(m, None)
+            self._open.pop(m, None)
 
     # -- chains / nodes --------------------------------------------------------
     def on_chain_start(self, serialized, inputs, *, run_id=None, parent_run_id=None,
