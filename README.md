@@ -102,10 +102,11 @@ graph.invoke(input, config={
 - **Multi-graph**: serve every graph in your project behind one URL; a top-bar selector
   scopes all views (runs, sessions, stats included - metrics never mix graphs).
 - **Artifacts**: when a node's output records a file path (a report it wrote, a chart,
-  an export), the run drawer and the node pane both surface it: HTML/PDF/images/text/CSV/code preview inline
-  (HTML sandboxed, scripts off), Word/Excel download with one click. Only paths recorded
-  by that run's own outputs are servable - never arbitrary files - behind the same
-  `/api` token gate.
+  an export), the run drawer and the node pane both surface it with inline preview and
+  one-click download. Previews: HTML/PDF/images/text/CSV/code, plus **Word and Excel**
+  rendered in-browser (vendored mammoth/SheetJS, lazy-loaded, shown in a sandboxed
+  frame). Only paths recorded by that run's own outputs are servable - never arbitrary
+  files - behind the same `/api` token gate.
 - **Fleet view**: with multiple graphs, a cross-graph overview becomes the landing page:
   a **Needs attention** list of every run paused on an interrupt (question shown inline,
   **resume right from the row**) or still running, plus per-graph health cards (last run,

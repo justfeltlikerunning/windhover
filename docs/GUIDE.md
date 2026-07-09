@@ -149,8 +149,10 @@ def report(state):
 - The run drawer grows an **artifacts** section (all files across the run) and each
   node execution in the node pane shows chips under its payload.
 - **Inline preview**: HTML (sandboxed iframe - scripts never execute), PDF, images/SVG,
-  Python (highlighted), CSV/TSV (as a table), JSON/markdown/text. **Download-only**:
-  Word/Excel/zip - browsers can't render those; Windhover doesn't pretend otherwise.
+  Python (highlighted), CSV/TSV (as a table), JSON/markdown/text, and **Word/Excel**
+  (rendered client-side via vendored mammoth/SheetJS, loaded lazily only when you preview
+  one; the rendered HTML shows in the same sandboxed frame). **Download-only**: zip,
+  parquet, and other binary formats. Every artifact is downloadable regardless.
 - Rules: absolute paths (`/…`, `~/…`, or `C:\…`) with a recognized extension. Relative
   paths and URLs are deliberately ignored so ordinary strings never false-positive.
 - **Locality**: the file must exist on the Windhover server's host. Runs traced in from

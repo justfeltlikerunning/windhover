@@ -49,8 +49,14 @@ def classify(path: str) -> dict:
         kind = "image"
     elif ext in _INLINE_TEXT:
         kind = "text"
+    elif ext in ("docx", "doc"):
+        kind = "word"          # client renders via vendored mammoth
+    elif ext in ("xlsx", "xls"):
+        kind = "sheet"         # client renders via vendored SheetJS
     else:
         kind = "file"
+    # `inline` drives the SERVER's content-disposition: office formats are still
+    # served as downloads; the client fetches their bytes separately to preview.
     return {"ext": ext, "mime": _EXTS.get(ext, "application/octet-stream"),
             "kind": kind, "inline": ext not in _DOWNLOAD}
 

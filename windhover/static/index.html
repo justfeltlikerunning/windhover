@@ -467,6 +467,8 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
 .artkind{font:600 10px var(--mono);text-transform:uppercase;letter-spacing:.06em;padding:3px 7px;border-radius:6px;
   background:var(--accent-weak);color:var(--accent-text)}
 .artkind.image{background:var(--chip-llm);color:var(--chip-llm-t)}
+.artkind.word{background:var(--chip-tool);color:var(--chip-tool-t)}
+.artkind.sheet{background:var(--ok-weak);color:var(--ok)}
 .artkind.file{background:var(--surface2);color:var(--muted)}
 .artname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .artsize{color:var(--muted);font:11px var(--mono);white-space:nowrap}
@@ -1110,7 +1112,7 @@ async function openRun(id){
         <span class="artname mono" title="${esc(a.path)}">${esc(a.name)}</span>
         ${a.exists?`<span class="artsize">${a.size<1024?a.size+' B':a.size<1048576?(a.size/1024).toFixed(1)+' KB':(a.size/1048576).toFixed(1)+' MB'}</span>`
                   :`<span class="tagchip" title="recorded by the run, but not readable on this host">missing here</span>`}
-        ${a.exists&&a.inline?`<button class="copy" onclick="previewArt('${id}','${encodeURIComponent(a.path)}','${a.kind}','${a.ext}','${esc(a.name)}')">preview</button>`:''}
+        ${a.exists&&ART_PREVIEWABLE.has(a.kind)?`<button class="copy" onclick="previewArt('${id}','${encodeURIComponent(a.path)}','${a.kind}','${a.ext}','${esc(a.name)}')">preview</button>`:''}
         ${a.exists?`<a class="copy" href="/api/runs/${id}/artifact?path=${encodeURIComponent(a.path)}${whToken()?'&token='+encodeURIComponent(whToken()):''}" download="${esc(a.name)}">download</a>`:''}
       </div>`).join('');
   }
@@ -1403,7 +1405,20 @@ function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s 
    wherever they render; the server allowlist still decides what actually serves */
 const ART_EXT={html:'html',htm:'html',pdf:'pdf',png:'image',jpg:'image',jpeg:'image',gif:'image',webp:'image',svg:'image',
   py:'text',md:'text',txt:'text',json:'text',csv:'text',tsv:'text',log:'text',yaml:'text',yml:'text',toml:'text',xml:'text',sql:'text',
-  docx:'file',xlsx:'file',pptx:'file',doc:'file',xls:'file',zip:'file',parquet:'file',db:'file',sqlite:'file'};
+  docx:'word',doc:'word',xlsx:'sheet',xls:'sheet',
+  pptx:'file',zip:'file',parquet:'file',db:'file',sqlite:'file'};
+const ART_PREVIEWABLE=new Set(['html','pdf','image','text','word','sheet']);
+function _loadScript(src){ return new Promise((res,rej)=>{
+  if(document.querySelector(`script[src="${src}"]`)) return res();
+  const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=()=>rej(new Error('load '+src));
+  document.head.appendChild(s); }); }
+function _renderHtmlFrame(html){
+  const f=document.createElement('iframe'); f.setAttribute('sandbox','');
+  $('#art-body').innerHTML=''; $('#art-body').appendChild(f);
+  f.srcdoc='<style>body{font:14px/1.55 -apple-system,system-ui,sans-serif;color:#111;background:#fff;'+
+    'padding:22px;margin:0}table{border-collapse:collapse;font-size:13px}td,th{border:1px solid #ccc;'+
+    'padding:4px 8px}h1,h2,h3{margin:.6em 0 .3em}img{max-width:100%}</style>'+html;
+}
 const ART_RE=new RegExp('^(?:\\/|~\\/|[A-Za-z]:[\\\\/])[^\\n\\r\\t*?<>|"\']{1,500}\\.('+Object.keys(ART_EXT).join('|')+')$','i');
 function artPaths(obj){
   const out=[],seen=new Set();
@@ -1422,7 +1437,7 @@ function artChips(runId,obj){
     return `<div class="artrow">
       <span class="artkind ${kind}">${esc(ext)}</span>
       <span class="artname mono" title="${esc(p)}">${esc(name)}</span>
-      ${kind!=='file'?`<button class="copy" onclick="event.stopPropagation();previewArt('${runId}','${encodeURIComponent(p)}','${kind}','${ext}','${esc(name)}')">preview</button>`:''}
+      ${ART_PREVIEWABLE.has(kind)?`<button class="copy" onclick="event.stopPropagation();previewArt('${runId}','${encodeURIComponent(p)}','${kind}','${ext}','${esc(name)}')">preview</button>`:''}
       <a class="copy" href="/api/runs/${runId}/artifact?path=${encodeURIComponent(p)}${tok}" download="${esc(name)}" onclick="event.stopPropagation()">download</a>
     </div>`;}).join('');
 }
@@ -1436,6 +1451,25 @@ window.previewArt=async(runId,encPath,kind,ext,name)=>{
   if(kind==='html') body.innerHTML=`<iframe sandbox="" src="${url}"></iframe>`;          // scripts stay off
   else if(kind==='pdf') body.innerHTML=`<iframe src="${url}"></iframe>`;
   else if(kind==='image') body.innerHTML=`<img src="${url}" alt="${esc(name)}">`;
+  else if(kind==='word'){ // docx -> html via vendored mammoth (lazy), rendered sandboxed
+    body.innerHTML='<pre>rendering document…</pre>';
+    try{
+      await _loadScript('/static/vendor/mammoth.browser.min.js');
+      const buf=await(await fetch(`/api/runs/${runId}/artifact?path=${encPath}`)).arrayBuffer();
+      const r=await mammoth.convertToHtml({arrayBuffer:buf});
+      _renderHtmlFrame(r.value||'<p>(empty document)</p>');
+    }catch(e){ body.innerHTML='<pre>could not render — download to open in Word</pre>'; }
+  }
+  else if(kind==='sheet'){ // xlsx -> html tables via vendored SheetJS (lazy)
+    body.innerHTML='<pre>rendering workbook…</pre>';
+    try{
+      await _loadScript('/static/vendor/xlsx.full.min.js');
+      const buf=await(await fetch(`/api/runs/${runId}/artifact?path=${encPath}`)).arrayBuffer();
+      const wb=XLSX.read(buf,{type:'array'});
+      const html=wb.SheetNames.map(nm=>`<h3>${esc(nm)}</h3>`+XLSX.utils.sheet_to_html(wb.Sheets[nm])).join('');
+      _renderHtmlFrame(html||'<p>(empty workbook)</p>');
+    }catch(e){ body.innerHTML='<pre>could not render — download to open in Excel</pre>'; }
+  }
   else{ // text-ish: fetch and render (py highlighted, csv as a table)
     body.innerHTML='<pre>loading…</pre>';
     try{
