@@ -100,10 +100,12 @@ graph.invoke(input, config={
 - **Living graph**: file watcher re-extracts topology in a subprocess and pushes it to the UI.
 - **Dashboards**: runs/tokens per day, per-model usage and latency, per-node latency, error rate.
 - **Multi-graph**: serve every graph in your project behind one URL; a top-bar selector
-  scopes all views (runs, sessions, stats included - metrics never mix graphs). Stats and
-  Sessions also offer an **All graphs** scope: deployment-wide totals with per-node rows
-  grouped per graph (same-named nodes never merge), and sessions showing every graph they
-  spanned - a journey that crosses graphs stays visible as one session.
+  scopes all views (runs, sessions, stats included - metrics never mix graphs). The
+  selector also offers **All graphs**: Stats shows deployment-wide totals with per-node
+  rows grouped per graph (same-named nodes never merge), Sessions shows every graph a
+  session spanned - a journey that crosses graphs stays one session - and Runs lists
+  everything. The graph canvas and Memory keep showing your last concrete graph (a small
+  note says which), since a topology and a store are per-graph by nature.
 - **Artifacts**: when a node's output records a file path (a report it wrote, a chart,
   an export), the run drawer and the node pane both surface it with inline preview and
   one-click download. Previews: HTML/PDF/images/text/CSV/code, rendered Markdown,

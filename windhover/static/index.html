@@ -359,8 +359,6 @@ textarea:focus{border-color:var(--accent)}
 .toast.show{opacity:1;transform:none}
 
 /* ---------- runs toolbar / chips / pager ---------- */
-.scopesel{background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text2);
-  font:600 12px var(--mono);padding:6px 10px;outline:none;cursor:pointer}
 .rtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .rtools input[type=search],.rtools select,.scoreadd input{background:var(--surface);border:1px solid var(--border);
   border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;outline:none}
@@ -568,6 +566,7 @@ a.copy{text-decoration:none}
       <div id="view-graph">
         <div id="cy"></div>
         <div class="graph-tools">
+          <span class="mono" id="allnote" style="display:none;color:var(--muted);font-size:11px;padding:6px 4px"></span>
           <button class="btn ghost" onclick="cy&&cy.fit(undefined,50)">Fit</button>
           <button class="btn ghost" onclick="relayout()">Layout</button>
           <button class="btn ghost" id="orient" onclick="toggleOrient()">⇅ Vertical</button>
@@ -602,9 +601,7 @@ a.copy{text-decoration:none}
       </div>
       <div id="view-sessions" style="display:none">
         <div class="page">
-          <div class="page-head"><h1>Sessions</h1><span class="sub" id="sess-sub"></span>
-            <select id="sess-scope" class="scopesel" style="display:none;margin-left:auto" onchange="SESS_ALL=this.value==='all';loadSessions()">
-              <option value="graph">selected graph</option><option value="all">All graphs</option></select></div>
+          <div class="page-head"><h1>Sessions</h1><span class="sub" id="sess-sub"></span></div>
           <div class="card"><div id="sess-wrap"><div class="empty">Loading…</div></div></div>
         </div>
       </div>
@@ -620,9 +617,7 @@ a.copy{text-decoration:none}
       </div>
       <div id="view-stats" style="display:none">
         <div class="page">
-          <div class="page-head"><h1>Stats</h1><span class="sub" id="stats-sub">all recorded runs</span>
-            <select id="stats-scope" class="scopesel" style="display:none;margin-left:auto" onchange="STATS_ALL=this.value==='all';loadStats()">
-              <option value="graph">selected graph</option><option value="all">All graphs</option></select></div>
+          <div class="page-head"><h1>Stats</h1><span class="sub" id="stats-sub">all recorded runs</span></div>
           <div id="stats-body"></div>
         </div>
       </div>
@@ -746,20 +741,27 @@ function cyStyle(){ return [
 function applyCyStyle(){ cy.style(cyStyle()); }
 
 /* ---------- graph ---------- */
-let GSEL=localStorage.getItem('wh-graph')||'';
-let STATS_ALL=false, SESS_ALL=false;   // per-view "All graphs" scope (multi-graph only)
+let GSEL=localStorage.getItem('wh-graph')||'';                 // ''=All graphs (multi-graph)
+let GLAST=localStorage.getItem('wh-graph-last')||'';           // last concrete pick — canvas/memory fallback
+function gAll(){ return multiGraph()&&!GSEL; }
+function gconc(){ return GSEL||GLAST||''; }                    // a concrete graph for views that need one
+function gparamC(pfx){ const g=gconc(); return g?pfx+'graph='+encodeURIComponent(g):''; }
 async function loadGraphList(){
   try{
     const d=await(await fetch('/api/graphs')).json();
     window.__graphList=d.graphs||[];
-    if(!window.__graphList.includes(GSEL)) GSEL=d.default||'';
+    const multi=window.__graphList.length>1;
+    // ''=All graphs is only meaningful multi-graph; otherwise snap to a real one
+    if(GSEL!==''||!multi){ if(!window.__graphList.includes(GSEL)) GSEL=d.default||''; }
+    if(!window.__graphList.includes(GLAST)) GLAST=GSEL||d.default||'';
     const sel=$('#gsel');
-    if(window.__graphList.length>1){
+    if(multi){
       $$('.nav-fleet').forEach(b=>b.style.display='');   // fleet view only makes sense multi-graph
-      $$('.scopesel').forEach(s=>s.style.display='');    // Stats/Sessions gain an All-graphs scope
       sel.style.display=''; $('#gname').style.display='none';
-      sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
+      sel.innerHTML=`<option value="" ${GSEL===''?'selected':''}>All graphs</option>`+
+        window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
       sel.onchange=()=>{ GSEL=sel.value; localStorage.setItem('wh-graph',GSEL);
+        if(GSEL){ GLAST=GSEL; localStorage.setItem('wh-graph-last',GLAST); }
         RF.graph=GSEL; const rg=$('#rgraph'); if(rg) rg.value=GSEL;
         loadGraph(true); probeMemory();
         if(VIEW==='memory') loadMemory();
@@ -781,8 +783,10 @@ function rgparam(){ const g=(window.__run||{}).graph||GSEL; return g?'graph='+en
 let XRAY=false;
 window.toggleXray=()=>{ XRAY=!XRAY; const b=$('#xray'); if(b)b.classList.toggle('on',XRAY); loadGraph(true); };
 async function loadGraph(force){
-  const t=await(await fetch('/api/graph?'+gparam(''))).json();
+  const t=await(await fetch('/api/graph?'+gparamC(''))).json();
   $('#gname').textContent=t.graph||'ingest-only';
+  const an=$('#allnote');  // in All-graphs scope the canvas shows one concrete graph
+  if(an){ an.style.display=gAll()?'':'none'; if(gAll()) an.textContent='canvas: '+(gconc()||t.graph||''); }
   const xb=$('#xray'); if(xb) xb.style.display=t.xray?'':'none';
   if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
   const topo=(XRAY&&t.xray)?t.xray:t;
@@ -847,7 +851,7 @@ function codeBlock(src,hi){ const lines=src.code.replace(/\n$/,'').split('\n');
 async function openNode(name){
   clearTimeout(window.__liveT); window.__run=null;
   let d={}; try{ d=await(await fetch('/api/nodes/'+encodeURIComponent(name))).json(); }catch(e){}
-  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source?'+gparam(''));
+  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source?'+gparamC(''));
     if(rs.ok) src=await rs.json(); }catch(e){}
   const s=d.summary||{}, errs=s.errors||0;
   $('#d-title').textContent=name;
@@ -966,7 +970,7 @@ document.addEventListener('visibilitychange',()=>{
 })();
 
 /* ---------- new run ---------- */
-$('#newrun').onclick=async()=>{ let tpl={},ctx={},cs={}; try{const sd=await(await fetch('/api/schema?'+gparam(''))).json(); tpl=sd.template||{}; ctx=sd.context_template||{}; cs=sd.context_schema||{};}catch(e){}
+$('#newrun').onclick=async()=>{ let tpl={},ctx={},cs={}; try{const sd=await(await fetch('/api/schema?'+gparamC(''))).json(); tpl=sd.template||{}; ctx=sd.context_template||{}; cs=sd.context_schema||{};}catch(e){}
   $('#input-json').value=JSON.stringify(tpl,null,2);
   const cw=document.getElementById('ctx-wrap');
   if(cw){ const has=cs&&cs.properties&&Object.keys(cs.properties).length;
@@ -980,7 +984,7 @@ $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json')
   const sess=$('#run-session').value.trim();
   const tags=$('#run-tags').value.split(',').map(s=>s.trim()).filter(Boolean);
   if(sess)input._session=sess; if(tags.length)input._tags=tags;
-  if(GSEL) input._graph=GSEL;
+  if(gconc()) input._graph=gconc();   // All-graphs scope: run on the same concrete graph the form's schema came from
   const paused=[...document.querySelectorAll('.pause-chip.on')].map(e=>e.dataset.n);
   if(paused.length) input._interrupt_before=paused;
   const cw=document.getElementById('ctx-wrap');
@@ -1060,7 +1064,7 @@ $('#rbook').onclick=()=>{RF.bookmarked=!RF.bookmarked;$('#rbook').classList.togg
 
 /* ---------- sessions ---------- */
 async function loadSessions(){
-  const all=SESS_ALL&&multiGraph();
+  const all=gAll();
   const ss=await(await fetch('/api/sessions?'+(all?'':gscope()))).json();
   $('#sess-sub').textContent=(ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'')+(all?' · all graphs':'');
   if(!ss.length){ $('#sess-wrap').innerHTML='<div class="empty"><div class="t">No sessions yet</div>Pass <span class="mono">session=</span> to <span class="mono">WindhoverTracer</span>, or <span class="mono">config={"metadata": {"windhover_session": …}}</span> in any LangChain/LangGraph app.</div>'; return; }
@@ -1370,7 +1374,7 @@ function chartCard(title,daily,val,errKey){
     <div class="clabels"><span>${daily[0]?.day||''}</span><span>${daily[daily.length-1]?.day||''}</span></div></div></div>`;
 }
 async function loadStats(){
-  const all=STATS_ALL&&multiGraph();
+  const all=gAll();
   const s=await(await fetch('/api/stats?days=30&'+(all?'':gscope()))).json(); const t=s.totals||{};
   const errRate=t.runs?Math.round((t.errors||0)/t.runs*100):0;
   const max=Math.max(1,...(s.per_node||[]).map(n=>n.avg_ms||0));
@@ -1632,7 +1636,7 @@ let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add
 
 let MEM_NS=[];
 async function probeMemory(){
-  try{ const r=await fetch('/api/memory/namespaces?'+gparam('')); if(!r.ok){ document.getElementById('nav-mem').style.display='none'; return; }
+  try{ const r=await fetch('/api/memory/namespaces?'+gparamC('')); if(!r.ok){ document.getElementById('nav-mem').style.display='none'; return; }
     MEM_NS=(await r.json()).namespaces||[];
     document.getElementById('nav-mem').style.display='';
     const m=document.querySelector('.bottom-nav .nav-mem'); if(m)m.style.display='';
@@ -1640,7 +1644,7 @@ async function probeMemory(){
 }
 async function loadMemory(){
   const sel=document.getElementById('mem-ns');
-  try{ const r=await fetch('/api/memory/namespaces?'+gparam('')); MEM_NS=(await r.json()).namespaces||[]; }catch(e){}
+  try{ const r=await fetch('/api/memory/namespaces?'+gparamC('')); MEM_NS=(await r.json()).namespaces||[]; }catch(e){}
   const cur=sel.value;
   sel.innerHTML=MEM_NS.map(ns=>`<option value="${esc(ns.join('.'))}">${esc(ns.join(' / '))}</option>`).join('');
   if(cur) sel.value=cur;
@@ -1648,7 +1652,7 @@ async function loadMemory(){
   const w=document.getElementById('mem-wrap');
   if(!ns){ w.innerHTML='<div class="empty"><div class="t">No memories yet</div>Nodes write with <span class="mono">get_store().put(namespace, key, value)</span> — items appear here.</div>'; return; }
   const q=document.getElementById('mem-q').value.trim();
-  const p=new URLSearchParams({namespace:ns}); if(q)p.set('query',q); if(GSEL)p.set('graph',GSEL);
+  const p=new URLSearchParams({namespace:ns}); if(q)p.set('query',q); if(gconc())p.set('graph',gconc());
   let d={items:[]}; try{ d=await(await fetch('/api/memory/items?'+p)).json(); }catch(e){}
   w.innerHTML=(d.items||[]).length?`<div style="overflow:auto"><table>
     <thead><tr><th>Key</th><th>Value</th><th class="r">Updated</th></tr></thead>
@@ -1673,7 +1677,7 @@ async function loadDatasets(){
     :`<div class="empty" style="padding:14px"><div class="t">No datasets yet</div>POST <span class="mono">/api/datasets</span> with <span class="mono">{name, items:[{input:{…}, expected:…}]}</span> — runs land in a session with an <span class="mono">expected_match</span> score per item.</div>`;
 }
 window.runDataset=async(id,name)=>{
-  const r=await fetch('/api/datasets/'+id+'/run?'+gparam(''),{method:'POST'});
+  const r=await fetch('/api/datasets/'+id+'/run?'+gparamC(''),{method:'POST'});
   const d=await r.json();
   if(!r.ok) return toast(d.error||'eval failed to start');
   toast('Eval started: '+d.items+' items → session '+d.session);
