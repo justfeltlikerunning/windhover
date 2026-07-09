@@ -1,4 +1,4 @@
-# Windhover — engineering spec (current as of v0.19)
+# Windhover - engineering spec (current as of v0.19)
 
 Self-hosted LangGraph/LangChain observability + human-in-the-loop console.
 Code is the only source of truth; Windhover observes and, for HITL, drives the
@@ -6,14 +6,14 @@ graph **only through native LangGraph primitives** (interrupt/resume, goto,
 breakpoints, update_state, checkpoint forking). No visual editing, ever.
 
 ## Design principles
-1. **Observe, never define.** Topology, schemas, source, memory — all derive from
+1. **Observe, never define.** Topology, schemas, source, memory - all derive from
    the user's compiled graph. Features appear only when the graph supports them.
 2. **One tracer, two sinks.** `SpanBuilder` handles every LangChain callback and
-   feeds either the local DB sink or the HTTP ingest sink — identical traces
+   feeds either the local DB sink or the HTTP ingest sink - identical traces
    wherever the run happened.
 3. **Runs are durable records.** Execution happens off the request thread; a run
    persists even if the browser disconnects. Resumes are NEW runs on the same
-   thread — traces are immutable.
+   thread - traces are immutable.
 4. **Degrade gracefully.** No graph → ingest-only collector. No FTS5/json1 →
    LIKE fallbacks. Unknown model → cost null. Interrupt → pause, not error.
 5. **Real package.** pip-installable (`windhover`), CI-tested 3.10–3.12, all
@@ -32,15 +32,15 @@ breakpoints, update_state, checkpoint forking). No visual editing, ever.
   version pushed over `/api/events` SSE.
 - **Tracer** (`windhover.tracer.SpanBuilder`): concurrency-safe per-root run
   contexts (parallel invokes = separate runs; bare llm/tool/retriever calls
-  open implicit runs; bookkeeping purged per run — no growth in long-lived
+  open implicit runs; bookkeeping purged per run - no growth in long-lived
   apps). Captures chains→node spans, LLM (params, tools offered,
   tokens+cache/reasoning details, TTFT, streaming partials ~0.5 s), tools,
   retrievers, retries, custom events, GraphInterrupt→interrupted (a pause,
   never an error), messages as {role, content, tool_calls},
   session/tags/run_name/thread_id via config metadata. The HTTP sink is
   non-blocking (bounded queue + drain thread, sheds oldest). Best-effort:
-  never raises into — or slows — the user's graph.
-- **Store** (`windhover.store`, SQLite WAL, schema v7): runs / spans (tree) /
+  never raises into - or slows - the user's graph.
+- **Store** (`windhover.store`, SQLite WAL, schema v8): runs / spans (tree) /
   scores / datasets (+span_fts). Feature-detects FTS5 & json1 at startup;
   idempotent column migrations.
 - **HITL** (`/api/threads/*`): thin wrappers over `Command(resume|goto)`,
@@ -62,16 +62,16 @@ breakpoints, update_state, checkpoint forking). No visual editing, ever.
   taps survive iOS dropping the notification URL via a Cache-API pending-nav
   handshake (sw stores target at click; page asks on boot; warm taps go over
   postMessage). PWA install icons are PNG (`apple-touch-icon` + manifest
-  192/512) — iOS ignores SVG there.
+  192/512) - iOS ignores SVG there.
 - **Fleet** (`store.overview()`): one call, grouped queries (7-day counts,
   recent-N per graph via window function with a pre-3.25 fallback, daily
   buckets for sparklines, attention list). An interrupted run whose thread has
   a newer run was resumed → excluded (`NOT EXISTS`), so "awaiting" never goes
-  stale. Serving registry ∪ stored graph names — ingest-only graphs appear
+  stale. Serving registry ∪ stored graph names - ingest-only graphs appear
   flagged not-serving.
 - **Artifacts** (`windhover.artifacts`): file paths detected in a run's
   recorded input/span outputs (absolute/`~`/drive + known extension only).
-  Serving re-derives the allowlist from the stored run on every request —
+  Serving re-derives the allowlist from the stored run on every request -
   unrecorded paths 404; never arbitrary reads. Inline kinds (html sandboxed,
   pdf, images, text/csv/py) vs download-only (office formats), nosniff,
   attachment disposition for downloads.

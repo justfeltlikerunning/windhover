@@ -1,4 +1,4 @@
-<p align="center"><img src="https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/logo.svg" width="112" alt="Windhover — a hovering kestrel"></p>
+<p align="center"><img src="https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/logo.svg" width="112" alt="Windhover - a hovering kestrel"></p>
 <h1 align="center">Windhover</h1>
 <p align="center">
   <a href="https://pypi.org/project/windhover/"><img src="https://img.shields.io/pypi/v/windhover" alt="PyPI"></a>
@@ -7,24 +7,24 @@
   <a href="https://buymeacoffee.com/justfeltlikerunning"><img src="https://img.shields.io/badge/☕-buy%20me%20a%20coffee-0F766E" alt="Buy me a coffee"></a>
 </p>
 
-> *Windhover* — the old poetic name for the kestrel, the falcon that hangs motionless
+> *Windhover*: the old poetic name for the kestrel, the falcon that hangs motionless
 > in the wind, watching everything below. This tool does the same for your agent graphs.
 
 **Self-hosted, mobile-friendly observability for [LangGraph](https://github.com/langchain-ai/langgraph).**
-Trace depth like LangSmith (LLM prompts, tokens, cost, latency — plus retrievers and
+Trace depth like LangSmith (LLM prompts, tokens, cost, latency - plus retrievers and
 human-in-the-loop interrupts), run history, a timing waterfall, per-node stats, error
-forensics down to the throwing source line — and a **living graph view** that auto-updates
+forensics down to the throwing source line - and a **living graph view** that auto-updates
 when your code's topology changes. Point it at any compiled graph, or trace runs in from
 your own app. No LangSmith account, no cloud tunnel, no fragile websocket. HTTP + SSE, MIT.
 
 > Nothing about your graph's domain is baked in. Topology, the input form, and run
-> outputs all come from the graph itself. Windhover observes — it never edits your graph.
+> outputs all come from the graph itself. Windhover observes - it never edits your graph.
 
-| Living graph (parallel fan-out) | Trace drawer — retrievers, LLM calls, cost, state |
+| Living graph (parallel fan-out) | Trace drawer - retrievers, LLM calls, cost, state |
 |---|---|
 | ![Graph view](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/graph.png) | ![Trace drawer](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/trace.png) |
 
-| Runs — search, tags, sessions, interrupts | Dashboards — per-day, per-model |
+| Runs - search, tags, sessions, interrupts | Dashboards - per-day, per-model |
 |---|---|
 | ![Runs table](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/runs.png) | ![Stats](https://raw.githubusercontent.com/justfeltlikerunning/windhover/main/docs/stats.png) |
 
@@ -47,10 +47,10 @@ Several graphs behind one URL: `WINDHOVER_GRAPH="checkout=app.flows:checkout,sup
 from windhover import WindhoverTracer
 graph.invoke(input, config={"callbacks": [WindhoverTracer("http://HOST:8090")]})
 ```
-Node spans, LLM calls (model/prompt/response/tokens/cost), and tools show up in **Runs** —
+Node spans, LLM calls (model/prompt/response/tokens/cost), and tools show up in **Runs** -
 wherever your app runs. Non-blocking, best-effort; never raises into your graph.
 
-Sessions and tags use standard LangChain config — no Windhover imports needed beyond the tracer:
+Sessions and tags use standard LangChain config - no Windhover imports needed beyond the tracer:
 ```python
 graph.invoke(input, config={
     "callbacks": [WindhoverTracer("http://HOST:8090")],
@@ -60,62 +60,62 @@ graph.invoke(input, config={
 ```
 
 ## Features
-- **Any graph** — topology from `graph.get_graph()`; input form from its state schema.
-- **Full trace tree** — nodes → nested LLM / tool / **retriever** spans: prompts, responses,
+- **Any graph**: topology from `graph.get_graph()`; input form from its state schema.
+- **Full trace tree**: nodes → nested LLM / tool / **retriever** spans: prompts, responses,
   tokens, cost, latency, retrieved documents with their metadata.
-- **Clickable graph** — tap a node for health, latency, wiring, its **source code**, and recent executions with payloads.
-- **Error forensics** — failed runs show the full traceback; the failing node turns red on the
+- **Clickable graph**: tap a node for health, latency, wiring, its **source code**, and recent executions with payloads.
+- **Error forensics**: failed runs show the full traceback; the failing node turns red on the
   graph, and the node's source renders with the **throwing line highlighted**.
-- **Human-in-the-loop console** — a paused graph shows an amber **interrupted** status with the
+- **Human-in-the-loop console**: a paused graph shows an amber **interrupted** status with the
   question it's asking; answer it (`Command(resume=…)`), redirect it (`Command(goto=…)`), set
   static breakpoints per run (`interrupt_before`), **edit state** at any checkpoint
-  (`update_state`), or **fork** a thread from any historical checkpoint — all from the UI,
+  (`update_state`), or **fork** a thread from any historical checkpoint - all from the UI,
   all pure LangGraph primitives.
-- **State evolution** — every trace shows which state keys each node wrote, in order.
-- **X-ray** — graphs with subgraphs get a canvas toggle that expands composite nodes
+- **State evolution**: every trace shows which state keys each node wrote, in order.
+- **X-ray**: graphs with subgraphs get a canvas toggle that expands composite nodes
   (`get_graph(xray=True)`).
-- **Search & filters** — full-text over prompts/payloads/errors (FTS5, LIKE fallback),
+- **Search & filters**: full-text over prompts/payloads/errors (FTS5, LIKE fallback),
   status/tag/session filters, bookmarks, pagination, CSV/JSON export.
-- **Sessions** — group runs into threads/batches; roll-up tokens, cost, errors.
-- **Scores** — attach numeric evals to runs (API or UI): eval harnesses, LLM-as-judge, human review.
-- **Live tail** — open a running run and watch spans arrive — including **the model typing**
+- **Sessions**: group runs into threads/batches; roll-up tokens, cost, errors.
+- **Scores**: attach numeric evals to runs (API or UI): eval harnesses, LLM-as-judge, human review.
+- **Live tail**: open a running run and watch spans arrive - including **the model typing**
   (streamed tokens flush into the span twice a second); nodes push progress via
   `get_stream_writer()`.
-- **Call configs** — every LLM span records temperature/max-tokens/stream **and the tools the
+- **Call configs**: every LLM span records temperature/max-tokens/stream **and the tools the
   model was offered**; conditional-edge branch labels and `add_node(metadata=…)` render on the
   graph and node pane; graphs with a context schema get a runtime-context box on New run.
-- **Custom events** — `dispatch_custom_event("name", {...})` anywhere in your app lands as an
+- **Custom events**: `dispatch_custom_event("name", {...})` anywhere in your app lands as an
   event marker in the trace, parented to the node that fired it.
-- **Retries + TTFT** — tenacity retries badge the span (`↻2`); streaming LLM calls record
+- **Retries + TTFT**: tenacity retries badge the span (`↻2`); streaming LLM calls record
   time-to-first-token; cache-read / reasoning token details show on the model line.
-- **Memory browser** — graphs compiled with a LangGraph `Store` get a Memory view: browse
+- **Memory browser**: graphs compiled with a LangGraph `Store` get a Memory view: browse
   namespaces and search long-term memory items.
-- **Time-travel** — checkpointed graphs get a per-thread checkpoint browser: state, writes,
+- **Time-travel**: checkpointed graphs get a per-thread checkpoint browser: state, writes,
   and next-nodes at every superstep (`get_state_history`).
-- **Run diff** — compare any two runs node-by-node: identical vs differing outputs,
+- **Run diff**: compare any two runs node-by-node: identical vs differing outputs,
   duration and token deltas.
-- **Datasets / batch eval** — store golden input sets, run the graph over them, and get an
+- **Datasets / batch eval**: store golden input sets, run the graph over them, and get an
   `expected_match` score per item (see Datasets on the Stats page).
-- **Run history + replay** — SQLite; runs persist even if the browser closes (worker thread).
-- **Living graph** — file watcher re-extracts topology in a subprocess and pushes it to the UI.
-- **Dashboards** — runs/tokens per day, per-model usage and latency, per-node latency, error rate.
-- **Multi-graph** — serve every graph in your project behind one URL; a top-bar selector
-  scopes all views (runs, sessions, stats included — metrics never mix graphs).
-- **Artifacts** — when a node's output records a file path (a report it wrote, a chart,
+- **Run history + replay**: SQLite; runs persist even if the browser closes (worker thread).
+- **Living graph**: file watcher re-extracts topology in a subprocess and pushes it to the UI.
+- **Dashboards**: runs/tokens per day, per-model usage and latency, per-node latency, error rate.
+- **Multi-graph**: serve every graph in your project behind one URL; a top-bar selector
+  scopes all views (runs, sessions, stats included - metrics never mix graphs).
+- **Artifacts**: when a node's output records a file path (a report it wrote, a chart,
   an export), the run drawer and the node pane both surface it: HTML/PDF/images/text/CSV/code preview inline
   (HTML sandboxed, scripts off), Word/Excel download with one click. Only paths recorded
-  by that run's own outputs are servable — never arbitrary files — behind the same
+  by that run's own outputs are servable - never arbitrary files - behind the same
   `/api` token gate.
-- **Fleet view** — with multiple graphs, a cross-graph overview becomes the landing page:
+- **Fleet view**: with multiple graphs, a cross-graph overview becomes the landing page:
   a **Needs attention** list of every run paused on an interrupt (question shown inline,
   **resume right from the row**) or still running, plus per-graph health cards (last run,
-  7-day run/error counts with a daily sparkline — errors in red — and recent runs).
+  7-day run/error counts with a daily sparkline - errors in red - and recent runs).
   Interrupts that were already resumed on their thread don't linger as false positives.
   Also available as `GET /api/overview`.
-- **Alerts** — `WINDHOVER_WEBHOOK` posts a JSON summary when a run errors or pauses; set
+- **Alerts**: `WINDHOVER_WEBHOOK` posts a JSON summary when a run errors or pauses; set
   VAPID keys and installed browsers can also subscribe to **Web Push** notifications (a 🔔 in
   the top bar; works as an installed PWA, iOS 16.4+ included).
-- **Never slows your app** — the remote tracer is non-blocking (bounded queue; drops
+- **Never slows your app**: the remote tracer is non-blocking (bounded queue; drops
   rather than delays when the collector is down).
 - **Mobile-first PWA**, light/dark. Fully local (FastAPI + Cytoscape.js).
 
@@ -139,34 +139,34 @@ curl -X POST :8090/api/runs/RUN_ID/scores -H 'Content-Type: application/json' \
 discovery, else ingest-only) · `WINDHOVER_GRAPH_DIR` · `WINDHOVER_DB`
 · `WINDHOVER_HOST`/`WINDHOVER_PORT` (0.0.0.0/8090) · `WINDHOVER_WATCH` (1) · `WINDHOVER_PRICING`
 · `WINDHOVER_RETENTION_DAYS` (0 = keep forever; else prune older runs on startup + every 6h)
-· `WINDHOVER_TOKEN` (set to require `Authorization: Bearer <token>` — or `?token=` — on all
+· `WINDHOVER_TOKEN` (set to require `Authorization: Bearer <token>` - or `?token=` - on all
 `/api` routes; the UI prompts once and remembers it)
 · `WINDHOVER_WEBHOOK` (POST a JSON alert whenever a run errors or pauses on an interrupt;
-accepts a single URL, or a comma list mixing a default with per-graph `name=url` overrides —
+accepts a single URL, or a comma list mixing a default with per-graph `name=url` overrides -
 e.g. `https://hooks.example/all,billing=https://hooks.example/billing`)
-· `WINDHOVER_VAPID_PUBLIC`/`WINDHOVER_VAPID_PRIVATE` (base64url VAPID keypair — set both to
+· `WINDHOVER_VAPID_PUBLIC`/`WINDHOVER_VAPID_PRIVATE` (base64url VAPID keypair - set both to
 enable browser Web Push; unset = feature hidden) · `WINDHOVER_VAPID_SUBJECT` (a `mailto:` or
-`https:` contact URL sent to the push service; use a real domain — some services reject `.local`)
-· `WINDHOVER_DIGEST` (`HH:MM` local time for one daily summary push — runs/errors/awaiting
+`https:` contact URL sent to the push service; use a real domain - some services reject `.local`)
+· `WINDHOVER_DIGEST` (`HH:MM` local time for one daily summary push - runs/errors/awaiting
 across all graphs, linking to the fleet; quiet days send nothing; requires Web Push keys).
 When several runs await approval, interrupt pushes link to the fleet queue instead of a
 single run.
 Edit `windhover/pricing.json` for your models' $/1M rates (unknown model → cost null).
 
 **Web Push setup:** generate a VAPID keypair (e.g. `openssl`/`py-vapid`), set the three env
-vars above (over **HTTPS** — browsers only allow push from a secure origin), install the app to
+vars above (over **HTTPS**: browsers only allow push from a secure origin), install the app to
 your home screen, and tap the 🔔. Alerts fire on the same errors/interrupts as the webhook.
 
 ## Docs
-**[The guide](docs/GUIDE.md)** covers every feature with how-tos and the fine print —
+**[The guide](docs/GUIDE.md)** covers every feature with how-tos and the fine print -
 including the most important nuance: *panels light up based on what your graph supports*
 (Memory needs a `store=`, time-travel/HITL need a `checkpointer=`, X-ray needs subgraphs,
-live typing needs `streaming=True`). An absent tab isn't a bug — it's a graph without that
+live typing needs `streaming=True`). An absent tab isn't a bug - it's a graph without that
 capability. [SPEC.md](SPEC.md) has the architecture.
 
 ## Notes
 Runs use the imported graph (restart to run new code); the *view* always reflects
-current-on-disk topology. All frontend assets are vendored — no CDN, works fully offline.
+current-on-disk topology. All frontend assets are vendored - no CDN, works fully offline.
 Deep links: `#runs`, `#sessions`, `#stats`, `#run=<id>`.
 
 ## License
