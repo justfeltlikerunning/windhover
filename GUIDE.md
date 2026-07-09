@@ -180,6 +180,11 @@ instances never see it):
   opens their run history, since there's no live topology to show.
 - The top-bar graph selector hides here (Fleet is cross-graph by definition) and
   returns on scoped views. Deep link: `#fleet`. Script access: `GET /api/overview`.
+- **Stats and Sessions** carry the cross-graph idea further with an "All graphs" scope
+  (top-right of each view, multi-graph only): deployment-wide totals, per-node latency
+  rows grouped per graph so same-named nodes never merge, and sessions listing every
+  graph they touched. Memory and Graph stay scoped by nature - memory namespaces belong
+  to one graph's store, and a topology canvas is per-graph by definition.
 
 ## How-to: phone alerts (Web Push)
 

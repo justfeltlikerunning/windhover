@@ -341,13 +341,17 @@ class Store:
         if graph:
             cond = " AND graph=?"; args.append(graph)
         with _lock, self._conn() as c:
-            return [dict(r) for r in c.execute(f"""SELECT session,
+            rows = [dict(r) for r in c.execute(f"""SELECT session,
                 COUNT(*) runs, COUNT(*) FILTER (WHERE status='error') errors,
                 MIN(started_ms) first_ms, MAX(started_ms) last_ms,
-                SUM(total_tokens) tokens, SUM(cost_usd) cost, SUM(duration_ms) duration_ms
+                SUM(total_tokens) tokens, SUM(cost_usd) cost, SUM(duration_ms) duration_ms,
+                GROUP_CONCAT(DISTINCT COALESCE(graph,'')) graphs
                 FROM runs WHERE session IS NOT NULL AND session!=''{cond}
                 GROUP BY session ORDER BY last_ms DESC LIMIT ?""",
                 (*args, limit)).fetchall()]
+        for r in rows:  # graphs a session touched — a journey can span graphs
+            r["graphs"] = [g for g in (r.get("graphs") or "").split(",") if g]
+        return rows
 
     def overview(self, days: int = 7, recent_n: int = 3, serving: tuple = ()) -> dict:
         """Fleet view: per-graph health + every run currently needing a human.
@@ -530,11 +534,20 @@ class Store:
                 COUNT(*) FILTER (WHERE status='error') errors,
                 SUM(total_tokens) tokens, SUM(cost_usd) cost,
                 SUM(llm_calls) llm_calls FROM runs{rcond}""", rargs).fetchone()
-            per_node = c.execute(f"""SELECT spans.name, COUNT(*) n,
-                AVG(spans.dur_ms) avg_ms, SUM(spans.cost_usd) cost
-                FROM spans JOIN runs ON runs.id = spans.run_id
-                WHERE spans.type='node'{scond}
-                GROUP BY spans.name ORDER BY avg_ms DESC LIMIT 20""", sargs).fetchall()
+            # cross-graph mode groups by (graph, node) — same-named nodes from
+            # different graphs must never merge into one misleading row
+            if graph:
+                per_node = c.execute(f"""SELECT spans.name, COUNT(*) n,
+                    AVG(spans.dur_ms) avg_ms, SUM(spans.cost_usd) cost
+                    FROM spans JOIN runs ON runs.id = spans.run_id
+                    WHERE spans.type='node'{scond}
+                    GROUP BY spans.name ORDER BY avg_ms DESC LIMIT 20""", sargs).fetchall()
+            else:
+                per_node = c.execute("""SELECT runs.graph, spans.name, COUNT(*) n,
+                    AVG(spans.dur_ms) avg_ms, SUM(spans.cost_usd) cost
+                    FROM spans JOIN runs ON runs.id = spans.run_id
+                    WHERE spans.type='node'
+                    GROUP BY runs.graph, spans.name ORDER BY avg_ms DESC LIMIT 30""").fetchall()
             models = c.execute(f"""SELECT spans.model, COUNT(*) calls,
                 SUM(spans.prompt_tokens) prompt_tokens,
                 SUM(spans.completion_tokens) completion_tokens,

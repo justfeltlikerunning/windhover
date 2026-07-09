@@ -359,6 +359,8 @@ textarea:focus{border-color:var(--accent)}
 .toast.show{opacity:1;transform:none}
 
 /* ---------- runs toolbar / chips / pager ---------- */
+.scopesel{background:var(--surface);border:1px solid var(--border);border-radius:9px;color:var(--text2);
+  font:600 12px var(--mono);padding:6px 10px;outline:none;cursor:pointer}
 .rtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
 .rtools input[type=search],.rtools select,.scoreadd input{background:var(--surface);border:1px solid var(--border);
   border-radius:8px;color:var(--text);padding:7px 10px;font-size:13px;outline:none}
@@ -600,7 +602,9 @@ a.copy{text-decoration:none}
       </div>
       <div id="view-sessions" style="display:none">
         <div class="page">
-          <div class="page-head"><h1>Sessions</h1><span class="sub" id="sess-sub"></span></div>
+          <div class="page-head"><h1>Sessions</h1><span class="sub" id="sess-sub"></span>
+            <select id="sess-scope" class="scopesel" style="display:none;margin-left:auto" onchange="SESS_ALL=this.value==='all';loadSessions()">
+              <option value="graph">selected graph</option><option value="all">All graphs</option></select></div>
           <div class="card"><div id="sess-wrap"><div class="empty">Loading…</div></div></div>
         </div>
       </div>
@@ -616,7 +620,9 @@ a.copy{text-decoration:none}
       </div>
       <div id="view-stats" style="display:none">
         <div class="page">
-          <div class="page-head"><h1>Stats</h1><span class="sub" id="stats-sub">all recorded runs</span></div>
+          <div class="page-head"><h1>Stats</h1><span class="sub" id="stats-sub">all recorded runs</span>
+            <select id="stats-scope" class="scopesel" style="display:none;margin-left:auto" onchange="STATS_ALL=this.value==='all';loadStats()">
+              <option value="graph">selected graph</option><option value="all">All graphs</option></select></div>
           <div id="stats-body"></div>
         </div>
       </div>
@@ -741,6 +747,7 @@ function applyCyStyle(){ cy.style(cyStyle()); }
 
 /* ---------- graph ---------- */
 let GSEL=localStorage.getItem('wh-graph')||'';
+let STATS_ALL=false, SESS_ALL=false;   // per-view "All graphs" scope (multi-graph only)
 async function loadGraphList(){
   try{
     const d=await(await fetch('/api/graphs')).json();
@@ -749,6 +756,7 @@ async function loadGraphList(){
     const sel=$('#gsel');
     if(window.__graphList.length>1){
       $$('.nav-fleet').forEach(b=>b.style.display='');   // fleet view only makes sense multi-graph
+      $$('.scopesel').forEach(s=>s.style.display='');    // Stats/Sessions gain an All-graphs scope
       sel.style.display=''; $('#gname').style.display='none';
       sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
       sel.onchange=()=>{ GSEL=sel.value; localStorage.setItem('wh-graph',GSEL);
@@ -1052,13 +1060,15 @@ $('#rbook').onclick=()=>{RF.bookmarked=!RF.bookmarked;$('#rbook').classList.togg
 
 /* ---------- sessions ---------- */
 async function loadSessions(){
-  const ss=await(await fetch('/api/sessions?'+gscope())).json();
-  $('#sess-sub').textContent=ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'';
+  const all=SESS_ALL&&multiGraph();
+  const ss=await(await fetch('/api/sessions?'+(all?'':gscope()))).json();
+  $('#sess-sub').textContent=(ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'')+(all?' · all graphs':'');
   if(!ss.length){ $('#sess-wrap').innerHTML='<div class="empty"><div class="t">No sessions yet</div>Pass <span class="mono">session=</span> to <span class="mono">WindhoverTracer</span>, or <span class="mono">config={"metadata": {"windhover_session": …}}</span> in any LangChain/LangGraph app.</div>'; return; }
   $('#sess-wrap').innerHTML=`<div style="overflow:auto"><table>
-    <thead><tr><th>Session</th><th class="r">Runs</th><th class="r">Errors</th><th class="r">Tokens</th><th class="r">Cost</th><th class="r">Total time</th><th class="r">Last active</th></tr></thead>
-    <tbody>${ss.map(s=>`<tr onclick="RF.session=decodeURIComponent('${encodeURIComponent(s.session)}');RF.offset=0;switchView('runs')">
+    <thead><tr><th>Session</th>${all?'<th>Graphs</th>':''}<th class="r">Runs</th><th class="r">Errors</th><th class="r">Tokens</th><th class="r">Cost</th><th class="r">Total time</th><th class="r">Last active</th></tr></thead>
+    <tbody>${ss.map(s=>`<tr onclick="RF.session=decodeURIComponent('${encodeURIComponent(s.session)}');RF.offset=0;${all?"RF.graph='';const rg=document.getElementById('rgraph');if(rg)rg.value='';":''}switchView('runs')">
       <td style="font-weight:600" class="mono">${esc(s.session)}</td>
+      ${all?`<td>${(s.graphs||[]).map(g=>`<span class="tagchip" style="cursor:default">${esc(g)}</span>`).join(' ')}</td>`:''}
       <td class="r num">${s.runs}</td>
       <td class="r num" ${s.errors?'style="color:var(--err)"':''}>${s.errors||'—'}</td>
       <td class="r num">${s.tokens?fmtk(s.tokens):'—'}</td>
@@ -1360,13 +1370,14 @@ function chartCard(title,daily,val,errKey){
     <div class="clabels"><span>${daily[0]?.day||''}</span><span>${daily[daily.length-1]?.day||''}</span></div></div></div>`;
 }
 async function loadStats(){
-  const s=await(await fetch('/api/stats?days=30&'+gscope())).json(); const t=s.totals||{};
+  const all=STATS_ALL&&multiGraph();
+  const s=await(await fetch('/api/stats?days=30&'+(all?'':gscope()))).json(); const t=s.totals||{};
   const errRate=t.runs?Math.round((t.errors||0)/t.runs*100):0;
   const max=Math.max(1,...(s.per_node||[]).map(n=>n.avg_ms||0));
   const daily=s.daily||[], models=s.models||[];
   const db=t.db_bytes!=null?(t.db_bytes/1048576).toFixed(1)+' MB db':'';
   const ssub=document.getElementById('stats-sub');
-  if(ssub) ssub.textContent=(multiGraph()&&GSEL)?('graph: '+GSEL):'all recorded runs';
+  if(ssub) ssub.textContent=all?'all graphs':((multiGraph()&&GSEL)?('graph: '+GSEL):'all recorded runs');
   $('#stats-body').innerHTML=`
     <div class="metrics">
       <div class="metric"><div class="v num">${t.runs||0}</div><div class="l">Total runs</div></div>
@@ -1392,8 +1403,8 @@ async function loadStats(){
         <td class="r num mono">${fmtms(Math.round(m.avg_ms||0))}</td></tr>`).join('')}</tbody></table></div></div>`:''}
     <div class="page-head"><h1 style="font-size:14px">Datasets — batch eval</h1></div>
     <div class="card" style="margin-bottom:14px"><div id="ds-wrap" style="padding:6px 8px"><div class="empty" style="padding:14px">Loading…</div></div></div>
-    <div class="page-head"><h1 style="font-size:14px">Average latency per node</h1></div>
-    <div class="card">${(s.per_node||[]).map(n=>`<div class="latrow"><div class="latname">${esc(n.name)}</div>
+    <div class="page-head"><h1 style="font-size:14px">Average latency per node</h1>${all?'<span class="sub">grouped per graph — same-named nodes never merge</span>':''}</div>
+    <div class="card">${(s.per_node||[]).map(n=>`<div class="latrow"><div class="latname">${n.graph?`<span class="tagchip" style="cursor:default;margin-right:6px">${esc(n.graph)}</span>`:''}${esc(n.name)}</div>
       <div class="lattrack"><div class="latfill" style="width:${(n.avg_ms||0)/max*100}%"></div></div>
       <div class="latms">${Math.round(n.avg_ms||0)} ms</div></div>`).join('')||'<div class="empty">No node timings yet</div>'}</div>`;
 }

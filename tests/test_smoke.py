@@ -605,10 +605,18 @@ def test_graph_scoped_stats_and_sessions():
     assert st_a["per_node"][0]["n"] == 2            # only alpha's spans, not beta's
     assert [m["model"] for m in st_a["models"]] == ["model-alpha"]
     st_all = s.stats()
-    assert st_all["totals"]["runs"] == 3 and st_all["per_node"][0]["n"] == 3
+    assert st_all["totals"]["runs"] == 3
+    # cross-graph per_node groups by (graph, name): shared_name stays TWO rows
+    shared = [r for r in st_all["per_node"] if r["name"] == "shared_name"]
+    assert len(shared) == 2 and {r["graph"] for r in shared} == {"alpha", "beta"}
+    assert {r["n"] for r in shared} == {2, 1}
     ses_b = s.sessions(graph="beta")
     assert [x["session"] for x in ses_b] == ["sess-beta"]
-    assert len(s.sessions()) == 2
+    all_ses = s.sessions()
+    assert len(all_ses) == 2
+    # each session reports the graphs it touched
+    by = {x["session"]: x["graphs"] for x in all_ses}
+    assert by["sess-alpha"] == ["alpha"] and by["sess-beta"] == ["beta"]
     print("graph-scoped stats/sessions OK")
 
 
