@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "windhover"
-version = "0.20.0"
+version = "0.21.1"
 description = "Self-hosted, mobile-friendly observability for LangGraph — traces, run history, cost, and a living graph view."
 readme = "README.md"
 requires-python = ">=3.10"

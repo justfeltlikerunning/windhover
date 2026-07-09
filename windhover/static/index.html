@@ -469,6 +469,9 @@ th{font-family:var(--mono);letter-spacing:.11em;font-size:10.5px}
 .artkind.image{background:var(--chip-llm);color:var(--chip-llm-t)}
 .artkind.word{background:var(--chip-tool);color:var(--chip-tool-t)}
 .artkind.sheet{background:var(--ok-weak);color:var(--ok)}
+.artkind.slides{background:var(--warn-weak);color:var(--warn)}
+.artkind.markdown,.artkind.text{background:var(--chip-ret);color:var(--chip-ret-t)}
+.artkind.video,.artkind.audio{background:var(--chip-llm);color:var(--chip-llm-t)}
 .artkind.file{background:var(--surface2);color:var(--muted)}
 .artname{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .artsize{color:var(--muted);font:11px var(--mono);white-space:nowrap}
@@ -478,6 +481,8 @@ a.copy{text-decoration:none}
 #art-body{flex:1;min-height:200px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface2)}
 #art-body iframe{width:100%;height:min(70vh,720px);border:none;display:block;background:#fff}
 #art-body img{max-width:100%;display:block;margin:0 auto}
+#art-body video{max-width:100%;max-height:72vh;display:block;margin:0 auto;background:#000}
+#art-body audio{width:calc(100% - 24px);display:block;margin:24px 12px}
 #art-body pre{margin:0;padding:12px;font:12px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word}
 #art-body table{border-collapse:collapse;font:12px var(--mono);width:100%}
 #art-body td,#art-body th{border:1px solid var(--border);padding:4px 8px;text-align:left;white-space:nowrap}
@@ -1403,11 +1408,15 @@ function ago(ms){ const s=(Date.now()-ms)/1000; if(s<60)return Math.round(s)+'s 
 /* ---------- artifacts (files a run wrote) ---------- */
 /* client-side mirror of the server's detector — for making payloads actionable
    wherever they render; the server allowlist still decides what actually serves */
-const ART_EXT={html:'html',htm:'html',pdf:'pdf',png:'image',jpg:'image',jpeg:'image',gif:'image',webp:'image',svg:'image',
-  py:'text',md:'text',txt:'text',json:'text',csv:'text',tsv:'text',log:'text',yaml:'text',yml:'text',toml:'text',xml:'text',sql:'text',
-  docx:'word',doc:'word',xlsx:'sheet',xls:'sheet',
-  pptx:'file',zip:'file',parquet:'file',db:'file',sqlite:'file'};
-const ART_PREVIEWABLE=new Set(['html','pdf','image','text','word','sheet']);
+const ART_EXT=(()=>{const m={},g=(ks,k)=>ks.split(' ').forEach(e=>m[e]=k);
+  g('html htm','html'); g('pdf','pdf');
+  g('png jpg jpeg gif webp svg bmp ico avif tif tiff','image');
+  g('md markdown','markdown');
+  g('py txt json csv tsv log yaml yml toml xml sql ndjson jsonl ini cfg conf rst tex sh js ts css diff patch','text');
+  g('mp4 webm mov m4v ogv','video'); g('mp3 wav ogg m4a flac aac','audio');
+  g('docx','word'); g('xlsx xls','sheet'); g('pptx','slides');
+  return m; })();  // anything unmapped -> 'file' (download-only)
+const ART_PREVIEWABLE=new Set(['html','pdf','image','markdown','text','video','audio','word','sheet','slides']);
 function _loadScript(src){ return new Promise((res,rej)=>{
   if(document.querySelector(`script[src="${src}"]`)) return res();
   const s=document.createElement('script'); s.src=src; s.onload=()=>res(); s.onerror=()=>rej(new Error('load '+src));
@@ -1451,6 +1460,36 @@ window.previewArt=async(runId,encPath,kind,ext,name)=>{
   if(kind==='html') body.innerHTML=`<iframe sandbox="" src="${url}"></iframe>`;          // scripts stay off
   else if(kind==='pdf') body.innerHTML=`<iframe src="${url}"></iframe>`;
   else if(kind==='image') body.innerHTML=`<img src="${url}" alt="${esc(name)}">`;
+  else if(kind==='video') body.innerHTML=`<video controls src="${url}"></video>`;
+  else if(kind==='audio') body.innerHTML=`<audio controls src="${url}"></audio>`;
+  else if(kind==='markdown'){ // md -> html via vendored marked (lazy), rendered sandboxed
+    body.innerHTML='<pre>rendering…</pre>';
+    try{
+      await _loadScript('/static/vendor/marked.min.js');
+      const t=await(await fetch(`/api/runs/${runId}/artifact?path=${encPath}`)).text();
+      _renderHtmlFrame(marked.parse(t));
+    }catch(e){ body.innerHTML='<pre>could not render markdown</pre>'; }
+  }
+  else if(kind==='slides'){ // pptx -> per-slide text outline via vendored jszip (lazy)
+    body.innerHTML='<pre>reading slides…</pre>';
+    try{
+      await _loadScript('/static/vendor/jszip.min.js');
+      const buf=await(await fetch(`/api/runs/${runId}/artifact?path=${encPath}`)).arrayBuffer();
+      const zip=await JSZip.loadAsync(buf);
+      const files=Object.keys(zip.files).filter(f=>/^ppt\/slides\/slide\d+\.xml$/.test(f))
+        .sort((a,b)=>parseInt(a.match(/\d+/))-parseInt(b.match(/\d+/)));
+      let html='';
+      for(let i=0;i<files.length;i++){
+        const xml=await zip.files[files[i]].async('string');
+        const runs=[...xml.matchAll(/<a:t>([^<]*)<\/a:t>/g)].map(m=>m[1]);
+        html+=`<div style="border:1px solid #ddd;border-radius:8px;padding:14px;margin:0 0 12px">`+
+          `<div style="font:600 11px ui-monospace,monospace;color:#888;margin-bottom:6px">SLIDE ${i+1}</div>`+
+          (runs.map(t=>`<p>${esc(t)}</p>`).join('')||'<p style="color:#aaa">(no text on slide)</p>')+`</div>`;
+      }
+      _renderHtmlFrame((html||'<p>(no slides found)</p>')+
+        '<p style="color:#888;font-size:12px">Text outline only — download for full formatting and images.</p>');
+    }catch(e){ body.innerHTML='<pre>could not read slides — download to open in PowerPoint</pre>'; }
+  }
   else if(kind==='word'){ // docx -> html via vendored mammoth (lazy), rendered sandboxed
     body.innerHTML='<pre>rendering document…</pre>';
     try{

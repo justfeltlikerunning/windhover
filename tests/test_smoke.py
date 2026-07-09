@@ -840,6 +840,15 @@ def test_artifacts_extract_classify_resolve():
     assert classify("/a/b.pdf")["inline"] and classify("/a/b.py")["kind"] == "text"
     assert classify("/a/b.docx")["inline"] is False
     assert classify("/a/b.PNG")["kind"] == "image"
+    # extended coverage: office/media/markdown render; legacy/binary download-only
+    assert classify("/a/b.md")["kind"] == "markdown"
+    assert classify("/a/b.mp4")["kind"] == "video" and classify("/a/b.mp4")["inline"]
+    assert classify("/a/b.mp3")["kind"] == "audio"
+    assert classify("/a/b.xlsx")["kind"] == "sheet" and classify("/a/b.xls")["kind"] == "sheet"
+    assert classify("/a/b.pptx")["kind"] == "slides" and classify("/a/b.pptx")["inline"] is False
+    assert classify("/a/b.doc")["kind"] == "file"      # legacy Word: no mammoth render
+    assert classify("/a/b.ppt")["kind"] == "file" and classify("/a/b.zip")["kind"] == "file"
+    assert classify("/a/model.pt")["kind"] == "file"   # ML artifact, download-only
 
     # run_artifacts + resolve against real files
     d = tempfile.mkdtemp()
