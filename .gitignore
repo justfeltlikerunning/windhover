@@ -1,3 +1,4 @@
+*.bak*
 *.db
 *.db-shm
 *.db-wal
@@ -8,3 +9,4 @@
 __pycache__/
 build/
 dist/
+windhover.db*
