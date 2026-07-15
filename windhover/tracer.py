@@ -18,7 +18,7 @@ Callback realities handled:
 Best-effort: a sink error never propagates into the user's graph.
 """
 from __future__ import annotations
-import json, time, uuid
+import json, os, time, uuid
 from pathlib import Path
 from typing import Any, Callable, Optional
 
@@ -34,7 +34,8 @@ def _load_pricing() -> dict:
     global _PRICING
     if _PRICING is None:
         try:
-            p = Path(__file__).parent / "pricing.json"
+            env = os.environ.get("WINDHOVER_PRICING")
+            p = Path(env) if env else Path(__file__).parent / "pricing.json"
             _PRICING = {k: v for k, v in json.loads(p.read_text()).items()
                         if not k.startswith("_")}
         except Exception:

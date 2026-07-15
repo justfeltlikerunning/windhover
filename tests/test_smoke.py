@@ -934,3 +934,16 @@ def test_version_single_source():
                              "windhover", "static", "index.html")).read()
     import re
     assert not re.search(r'id="ver">v?\d', html), "footer version must not be hardcoded"
+
+
+def test_pricing_env_override(tmp_path, monkeypatch):
+    # WINDHOVER_PRICING points cost tracking at a deployment's own rate table
+    import windhover.tracer as tr
+    p = tmp_path / "pricing.json"
+    p.write_text('{"my-model": {"input": 1.0, "output": 2.0}, "_note": "meta"}')
+    monkeypatch.setenv("WINDHOVER_PRICING", str(p))
+    tr._PRICING = None
+    try:
+        assert set(tr._load_pricing()) == {"my-model"}   # env table wins, _-keys dropped
+    finally:
+        tr._PRICING = None
