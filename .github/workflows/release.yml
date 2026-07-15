@@ -1,0 +1,32 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write        # OIDC — PyPI Trusted Publishing, no stored token
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Build sdist + wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+      - name: Verify artifacts are clean
+        run: |
+          twine check dist/*
+          if tar tzf dist/*.tar.gz | grep -iE '\.db|bak|\.log|\.env|\.p8|testera'; then
+            echo "::error::unsafe files found in sdist"; exit 1
+          fi
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
