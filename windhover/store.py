@@ -283,6 +283,17 @@ class Store:
         return {"pruned_runs": len(ids), "cutoff_ms": cutoff}
 
     # ---- reads ------------------------------------------------------------
+    @staticmethod
+    def _graph_where(col: str, graph: str) -> tuple:
+        """Graph filter for reads. Path-style names ("a/b/c") form a subject
+        tree; a filter ending in "/*" scopes to that subject — the prefix
+        itself plus everything under it, any depth."""
+        if graph.endswith("/*"):
+            prefix = graph[:-2]
+            like = prefix.replace("\\", "\\\\").replace("%", r"\%").replace("_", r"\_")
+            return (f"({col}=? OR {col} LIKE ? ESCAPE '\\')", [prefix, like + "/%"])
+        return (f"{col}=?", [graph])
+
     def runs(self, limit: int = 50, offset: int = 0, q: Optional[str] = None,
              status: Optional[str] = None, graph: Optional[str] = None,
              session: Optional[str] = None, tag: Optional[str] = None,
@@ -301,7 +312,8 @@ class Store:
         if status:
             where.append("status=?"); args.append(status)
         if graph:
-            where.append("graph=?"); args.append(graph)
+            gsql, gargs = self._graph_where("graph", graph)
+            where.append(gsql); args += gargs
         if session:
             where.append("session=?"); args.append(session)
         if tag:
@@ -339,7 +351,8 @@ class Store:
     def sessions(self, limit: int = 100, graph: Optional[str] = None) -> list[dict]:
         cond, args = "", []
         if graph:
-            cond = " AND graph=?"; args.append(graph)
+            gsql, args = self._graph_where("graph", graph)
+            cond = " AND " + gsql
         with _lock, self._conn() as c:
             rows = [dict(r) for r in c.execute(f"""SELECT session,
                 COUNT(*) runs, COUNT(*) FILTER (WHERE status='error') errors,
@@ -527,27 +540,31 @@ class Store:
         rcond, rargs = ("", [])
         scond, sargs = ("", [])
         if graph:
-            rcond = " WHERE graph=?"; rargs = [graph]
-            scond = " AND runs.graph=?"; sargs = [graph]
+            gsql, rargs = self._graph_where("graph", graph)
+            rcond = " WHERE " + gsql
+            sgsql, sargs = self._graph_where("runs.graph", graph)
+            scond = " AND " + sgsql
         with _lock, self._conn() as c:
             tot = c.execute(f"""SELECT COUNT(*) runs,
                 COUNT(*) FILTER (WHERE status='error') errors,
                 SUM(total_tokens) tokens, SUM(cost_usd) cost,
-                SUM(llm_calls) llm_calls FROM runs{rcond}""", rargs).fetchone()
-            # cross-graph mode groups by (graph, node) — same-named nodes from
-            # different graphs must never merge into one misleading row
-            if graph:
+                SUM(llm_calls) llm_calls, AVG(duration_ms) avg_ms
+                FROM runs{rcond}""", rargs).fetchone()
+            # cross-graph modes (no filter, or a "…/*" subject scope) group by
+            # (graph, node) — same-named nodes from different graphs must never
+            # merge into one misleading row
+            if graph and not graph.endswith("/*"):
                 per_node = c.execute(f"""SELECT spans.name, COUNT(*) n,
                     AVG(spans.dur_ms) avg_ms, SUM(spans.cost_usd) cost
                     FROM spans JOIN runs ON runs.id = spans.run_id
                     WHERE spans.type='node'{scond}
                     GROUP BY spans.name ORDER BY avg_ms DESC LIMIT 20""", sargs).fetchall()
             else:
-                per_node = c.execute("""SELECT runs.graph, spans.name, COUNT(*) n,
+                per_node = c.execute(f"""SELECT runs.graph, spans.name, COUNT(*) n,
                     AVG(spans.dur_ms) avg_ms, SUM(spans.cost_usd) cost
                     FROM spans JOIN runs ON runs.id = spans.run_id
-                    WHERE spans.type='node'
-                    GROUP BY runs.graph, spans.name ORDER BY avg_ms DESC LIMIT 30""").fetchall()
+                    WHERE spans.type='node'{scond}
+                    GROUP BY runs.graph, spans.name ORDER BY avg_ms DESC LIMIT 30""", sargs).fetchall()
             models = c.execute(f"""SELECT spans.model, COUNT(*) calls,
                 SUM(spans.prompt_tokens) prompt_tokens,
                 SUM(spans.completion_tokens) completion_tokens,
@@ -559,7 +576,7 @@ class Store:
                 strftime('%Y-%m-%d', started_ms/1000, 'unixepoch') day,
                 COUNT(*) runs, COUNT(*) FILTER (WHERE status='error') errors,
                 SUM(total_tokens) tokens, SUM(cost_usd) cost
-                FROM runs WHERE started_ms >= ?{' AND graph=?' if graph else ''}
+                FROM runs WHERE started_ms >= ?{rcond.replace(' WHERE ', ' AND ') if graph else ''}
                 GROUP BY day ORDER BY day""", (cutoff, *rargs)).fetchall()
         try:
             db_bytes = os.path.getsize(self.path)

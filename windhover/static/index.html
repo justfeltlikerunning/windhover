@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0E0E1C" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#0C0C17" media="(prefers-color-scheme: dark)">
 <meta name="theme-color" content="#F4F4F8" media="(prefers-color-scheme: light)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png">
@@ -37,24 +37,24 @@
   --display:"Fraunces",Georgia,"Times New Roman",serif;
 }
 :root[data-theme="dark"]{
-  --bg:#0E0E1C; --surface:#16162A; --surface2:#1D1D35; --border:#28284A; --border2:#3A3A5E;
-  --text:#E9E8F4; --text2:#A9A9C7; --muted:#6C6C8F;
+  --bg:#0C0C17; --surface:#12121F; --surface2:#1D1D35; --border:#1E1E36; --border2:#23233D;
+  --text:#E9E8F4; --text2:#A9A9C7; --muted:#54547A;
   --accent:#45D0BE; --accent-weak:#0F2A26; --accent-text:#8AE8DA;
   --band:#45D0BE; --band-weak:#0F2A26;
   --ok:#4CC38A; --ok-weak:#12291D; --warn:#E5A13D; --warn-weak:#2E2210; --err:#F08A5E; --err-weak:#331B10;
   --chip-node:#0F2A26; --chip-node-t:#8AE8DA; --chip-llm:#16283A; --chip-llm-t:#7FB2E5; --chip-tool:#232349; --chip-tool-t:#A9ACF8; --chip-ret:#0E2833; --chip-ret-t:#7DD8F0;
-  --rail:#0A0A16; --rail-text:#A9A9C7; --rail-text2:#63638A; --rail-line:#202040; --rail-on:#FFFFFF;
+  --rail:#0C0C17; --rail-text:#A9A9C7; --rail-text2:#54547A; --rail-line:#1E1E36; --rail-on:#FFFFFF;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
   --shadow-lg:0 12px 48px rgba(0,0,0,.55);
 }
 @media (prefers-color-scheme: dark){ :root:not([data-theme]){
-  --bg:#0E0E1C; --surface:#16162A; --surface2:#1D1D35; --border:#28284A; --border2:#3A3A5E;
-  --text:#E9E8F4; --text2:#A9A9C7; --muted:#6C6C8F;
+  --bg:#0C0C17; --surface:#12121F; --surface2:#1D1D35; --border:#1E1E36; --border2:#23233D;
+  --text:#E9E8F4; --text2:#A9A9C7; --muted:#54547A;
   --accent:#45D0BE; --accent-weak:#0F2A26; --accent-text:#8AE8DA;
   --band:#45D0BE; --band-weak:#0F2A26;
   --ok:#4CC38A; --ok-weak:#12291D; --warn:#E5A13D; --warn-weak:#2E2210; --err:#F08A5E; --err-weak:#331B10;
   --chip-node:#0F2A26; --chip-node-t:#8AE8DA; --chip-llm:#16283A; --chip-llm-t:#7FB2E5; --chip-tool:#232349; --chip-tool-t:#A9ACF8; --chip-ret:#0E2833; --chip-ret-t:#7DD8F0;
-  --rail:#0A0A16; --rail-text:#A9A9C7; --rail-text2:#63638A; --rail-line:#202040; --rail-on:#FFFFFF;
+  --rail:#0C0C17; --rail-text:#A9A9C7; --rail-text2:#54547A; --rail-line:#1E1E36; --rail-on:#FFFFFF;
   --shadow:0 1px 2px rgba(0,0,0,.3),0 4px 16px rgba(0,0,0,.35);
   --shadow-lg:0 12px 48px rgba(0,0,0,.55);
 }}
@@ -74,7 +74,9 @@ button{font:inherit;color:inherit;background:none;border:none;cursor:pointer;pad
 aside{width:216px;flex:none;background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;padding:16px 10px calc(env(safe-area-inset-bottom) + 12px)}
 .logo{display:flex;align-items:center;gap:10px;padding:4px 10px 16px;font-weight:700;font-size:15px;letter-spacing:.2px}
 .logo svg{flex:none}
-.nav{display:flex;flex-direction:column;gap:2px}
+.nav{display:flex;flex-direction:column;gap:1px}
+.nav-sec{font-family:var(--mono);font-size:9px;letter-spacing:.16em;text-transform:uppercase;color:var(--rail-text2);padding:14px 12px 5px}
+.nav-sec:first-of-type{padding-top:6px}
 .nav button{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--text2);font-weight:500;text-align:left;width:100%}
 .nav button:hover{background:var(--surface2)}
 .nav button.on{background:var(--accent-weak);color:var(--accent-text);font-weight:600}
@@ -116,6 +118,7 @@ th{position:sticky;top:0;background:var(--surface);text-align:left;font-size:11.
 td{padding:11px 14px;border-bottom:1px solid var(--border);white-space:nowrap;vertical-align:middle}
 tbody tr{cursor:pointer}
 tbody tr:hover{background:var(--surface2)}
+tbody tr.rsel{background:var(--accent-weak);box-shadow:inset 2px 0 0 var(--accent)}
 tbody tr:last-child td{border-bottom:none}
 td.r,th.r{text-align:right}
 .mono{font-family:var(--mono);font-size:12.5px;color:var(--text2)}
@@ -132,131 +135,6 @@ td.r,th.r{text-align:right}
 .page-head .sub{color:var(--muted);font-size:13px}
 .empty{padding:56px 20px;text-align:center;color:var(--muted)}
 .empty .t{font-weight:600;color:var(--text2);margin-bottom:4px}
-
-/* ---------- human-in-the-loop ---------- */
-async function consumeRunStream(res){
-  const rd=res.body.getReader(),dec=new TextDecoder(); let buf='';
-  while(true){ const {value,done}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
-    let ps=buf.split('\n\n'); buf=ps.pop();
-    for(const p of ps){ const ev=(p.match(/event: (.*)/)||[])[1],dm=(p.match(/data: (.*)/s)||[])[1]; if(!ev)continue; const d=dm?JSON.parse(dm):{};
-      if(ev==='node'&&cy){ cy.$id(d.node).addClass('running'); }
-      else if(ev==='progress'){ toast('progress: '+JSON.stringify(d.data).slice(0,120)); }
-      else if(ev==='interrupted'){ toast('Paused again — awaiting human'); }
-      else if(ev==='done'){ toast('Resumed run complete'); }
-      else if(ev==='error'){ toast('Resume error: '+(d.message||'failed')); } } }
-  if(VIEW==='runs') loadRuns();
-}
-function parseMaybeJSON(v){ if(v==='')return undefined;
-  try{ return JSON.parse(v); }catch(e){ return v; } }
-window.resumeThread=async(tid)=>{
-  const raw=document.getElementById('hitl-val').value.trim();
-  const body={}; const v=parseMaybeJSON(raw); if(v!==undefined) body.value=v;
-  closeAll(); switchView('graph'); toast('Resuming thread '+tid.slice(0,8)+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
-    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
-  await consumeRunStream(res);
-};
-window.resumeGoto=async(tid)=>{
-  const g=document.getElementById('hitl-goto').value; if(!g) return toast('Pick a node first');
-  closeAll(); switchView('graph'); toast('Redirecting thread to '+g+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
-    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({goto:g})});
-  if(!res.ok){ toast((await res.json()).error||'resume failed'); return; }
-  await consumeRunStream(res);
-};
-window.rerunFrom=async(tid,cid)=>{
-  closeAll(); switchView('graph'); toast('Forking from checkpoint '+String(cid).slice(-8)+'…');
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/resume?'+rgparam(),
-    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({checkpoint_id:cid})});
-  if(!res.ok){ toast((await res.json()).error||'fork failed'); return; }
-  await consumeRunStream(res);
-};
-window.editState=async(tid,cid,valuesJson)=>{
-  const cur=window.prompt('Edit state values (JSON object) — applied via update_state:',valuesJson||'{}');
-  if(cur==null) return;
-  let values; try{ values=JSON.parse(cur); }catch(e){ return toast('Invalid JSON'); }
-  const body={values}; if(cid) body.checkpoint_id=cid;
-  const res=await fetch('/api/threads/'+encodeURIComponent(tid)+'/state?'+rgparam(),
-    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-  const d=await res.json();
-  if(!res.ok) return toast(d.error||'update_state failed');
-  toast('State updated — new checkpoint '+String(d.checkpoint_id||'').slice(-8)+'; Resume to continue');
-  showHistory(tid);
-};
-
-/* ---------- time-travel (checkpoint history) ---------- */
-window.showHistory=async(tid)=>{
-  clearTimeout(window.__liveT);
-  let d=null; try{ const r=await fetch('/api/threads/'+encodeURIComponent(tid)+'/history?'+rgparam());
-    d=await r.json(); if(!r.ok) return toast(d.error||'history unavailable'); }catch(e){ return toast('history unavailable'); }
-  const steps=d.steps||[];
-  $('#d-title').textContent='thread '+tid.slice(0,10)+' · time-travel';
-  const st=$('#d-status'); st.className='status done'; $('#d-status-t').textContent=steps.length+' checkpoints';
-  $('#d-meta').innerHTML='<span>newest first — every LangGraph checkpoint for this thread</span>';
-  $('#d-body').innerHTML=steps.map((s,i)=>{
-    const did='tt'+i;
-    const writes=s.writes&&typeof s.writes==='object'?Object.keys(s.writes):[];
-    return `<div>
-      <div class="tr-row flat" onclick="tog('${did}',this)">
-        <div class="tr-main"><span class="caret">▶</span>
-          <span class="chip node">step ${s.step??'—'}</span>
-          <span class="tr-name">${esc(s.source||'')}</span>
-          ${writes.map(w=>`<span class="tagchip" style="cursor:default">${esc(w)}</span>`).join('')}
-          ${(s.next||[]).length?`<span class="mono" style="color:var(--muted);font-size:11px">→ ${esc((s.next||[]).join(', '))}</span>`:''}</div>
-        <div class="tr-meta">${s.created_at?esc(String(s.created_at).slice(11,19)):''}</div>
-      </div>
-      <div class="tr-detail" id="${did}">
-        ${s.writes!=null?kv('writes',s.writes):''}
-        ${kv('state at this checkpoint',s.values)}
-        <div style="display:flex;gap:8px;margin:4px 0 10px">
-          <button class="btn ghost" onclick='rerunFrom("${esc(tid)}","${esc(s.checkpoint_id||'')}")'>⑂ Re-run from here</button>
-          <button class="btn ghost" onclick='editState("${esc(tid)}","${esc(s.checkpoint_id||'')}",${JSON.stringify(JSON.stringify(s.values??{}))})'>✎ Edit state</button>
-        </div>
-      </div></div>`;
-  }).join('')||'<div class="empty">No checkpoints recorded for this thread</div>';
-  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
-};
-
-/* ---------- run diff ---------- */
-window.pickDiff=async(id)=>{
-  if(!window.__diffA||window.__diffA===id){ window.__diffA=id; toast('Compare: pick a second run (open it, hit compare)'); return; }
-  const a=window.__diffA; window.__diffA=null;
-  clearTimeout(window.__liveT);
-  const [ra,rb]=await Promise.all([fetch('/api/runs/'+a).then(r=>r.json()),
-                                   fetch('/api/runs/'+id).then(r=>r.json())]);
-  const tops=r=>r.spans.filter(s=>!s.parent_id&&s.type==='node');
-  const A=tops(ra),B=tops(rb);
-  const names=[...new Set([...A.map(s=>s.name),...B.map(s=>s.name)])];
-  $('#d-title').textContent='diff · '+a.slice(0,8)+' ↔ '+id.slice(0,8);
-  const st=$('#d-status'); st.className='status done'; $('#d-status-t').textContent='compare';
-  const delta=(x,y,f)=>{const va=x?.[f],vb=y?.[f]; if(va==null&&vb==null)return '';
-    return `<span class="mono" style="font-size:11px;color:var(--muted)">${va??'—'} → ${vb??'—'}</span>`;};
-  $('#d-meta').innerHTML=[
-    `<span>A <b class="mono">${esc(ra.graph||'')} ${a.slice(0,8)}</b></span>`,
-    `<span>B <b class="mono">${esc(rb.graph||'')} ${id.slice(0,8)}</b></span>`,
-    `<span>duration ${delta(ra,rb,'duration_ms')}</span>`,
-    `<span>tokens ${delta(ra,rb,'total_tokens')}</span>`].join('');
-  $('#d-body').innerHTML=names.map((n,i)=>{
-    const sa=A.find(s=>s.name===n),sb=B.find(s=>s.name===n);
-    const ja=JSON.stringify(sa?.output??null),jb=JSON.stringify(sb?.output??null);
-    const same=ja===jb;
-    const did='df'+i;
-    return `<div>
-      <div class="tr-row flat" onclick="tog('${did}',this)">
-        <div class="tr-main"><span class="caret">▶</span><span class="chip node">${esc(n)}</span>
-          <span class="tr-name" style="color:${same?'var(--muted)':'var(--err)'}">${same?'≡ identical output':'≠ outputs differ'}</span></div>
-        <div class="tr-meta">${sa?.dur_ms??'—'} / ${sb?.dur_ms??'—'} ms</div>
-      </div>
-      <div class="tr-detail" id="${did}">
-        <div class="diffgrid">
-          <div class="kv"><div class="k">A · ${esc(n)}</div><pre>${esc(JSON.stringify(sa?.output??'(absent)',null,2))}</pre></div>
-          <div class="kv"><div class="k">B · ${esc(n)}</div><pre>${esc(JSON.stringify(sb?.output??'(absent)',null,2))}</pre></div>
-        </div>
-      </div></div>`;
-  }).join('');
-  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
-};
 
 /* ---------- stats ---------- */
 .metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
@@ -276,6 +154,16 @@ window.pickDiff=async(id)=>{
 .drawer{position:fixed;top:0;right:0;bottom:0;width:min(600px,100vw);background:var(--surface);border-left:1px solid var(--border);
   box-shadow:var(--shadow-lg);transform:translateX(102%);transition:transform .24s cubic-bezier(.3,.9,.35,1);z-index:50;display:flex;flex-direction:column}
 .drawer.on{transform:none}
+/* docked mode: the same drawer, as the Runs master-detail right pane */
+.drawer.docked{position:static;transform:none;width:100%;height:100%;box-shadow:none;
+  border-left:none;z-index:auto;background:var(--surface)}
+/* ---------- runs master-detail split ---------- */
+#view-runs{height:100%}
+.runs-split{display:flex;height:100%;min-height:0}
+.runs-main{flex:1;min-width:0;overflow:auto}
+.runs-detail{width:min(440px,44%);flex:none;border-left:1px solid var(--border);
+  display:flex;flex-direction:column;min-height:0;background:var(--surface)}
+@media(max-width:840px){.runs-detail{display:none !important}}  /* mobile falls back to the slide-over */
 .dhead{padding:16px 20px 12px;border-bottom:1px solid var(--border)}
 .dhead .row1{display:flex;align-items:center;gap:10px}
 .dhead h2{margin:0;font-size:15px;font-weight:700}
@@ -357,6 +245,30 @@ textarea:focus{border-color:var(--accent)}
   border-left:3px solid var(--accent);border-radius:10px;box-shadow:var(--shadow-lg);padding:11px 16px;font-size:13px;color:var(--text2);
   z-index:70;opacity:0;transform:translateY(8px);transition:.2s;pointer-events:none;max-width:min(420px,90vw)}
 .toast.show{opacity:1;transform:none}
+
+/* ---------- command palette (⌘K) ---------- */
+.palette-trigger{display:flex;align-items:center;gap:8px;width:min(420px,42vw);padding:6px 11px;border-radius:8px;
+  border:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:12.5px}
+.palette-trigger:hover{border-color:var(--border2);color:var(--text2)}
+.palette-trigger .pt-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pt-kbd{margin-left:auto;font-family:var(--mono);font-size:10px;border:1px solid var(--border);border-radius:4px;padding:0 5px;color:var(--muted)}
+@media(max-width:840px){.palette-trigger .pt-label,.palette-trigger .pt-kbd{display:none}.palette-trigger{width:auto}}
+.pal-scrim{position:fixed;inset:0;background:rgba(2,6,23,.55);opacity:0;pointer-events:none;transition:.14s;z-index:80}
+.pal-scrim.on{opacity:1;pointer-events:auto}
+.pal{position:fixed;left:50%;top:96px;transform:translateX(-50%) scale(.98);width:min(560px,92vw);
+  background:var(--surface);border:1px solid var(--border2);border-radius:13px;box-shadow:var(--shadow-lg);
+  z-index:85;overflow:hidden;opacity:0;pointer-events:none;transition:.14s}
+.pal.on{opacity:1;pointer-events:auto;transform:translateX(-50%) scale(1)}
+.pal-head{display:flex;align-items:center;gap:9px;padding:12px 14px;border-bottom:1px solid var(--border);color:var(--muted)}
+.pal-head input{flex:1;background:none;border:none;outline:none;color:var(--text);font:14px inherit}
+.pal-list{max-height:min(360px,60vh);overflow:auto;padding:6px}
+.pal-item{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;cursor:pointer}
+.pal-item.sel,.pal-item:hover{background:var(--surface2)}
+.pal-kind{font-family:var(--mono);font-size:9px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);width:42px;flex:none}
+.pal-dot{width:6px;height:6px;border-radius:50%;flex:none}
+.pal-label{font-family:var(--mono);font-size:12.5px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pal-sub{color:var(--muted);font-size:11px;margin-left:auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45%}
+.pal-empty{padding:18px;text-align:center;color:var(--muted);font-size:12.5px}
 
 /* ---------- runs toolbar / chips / pager ---------- */
 .rtools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px}
@@ -488,6 +400,12 @@ a.copy{text-decoration:none}
 #art-body td,#art-body th{border:1px solid var(--border);padding:4px 8px;text-align:left;white-space:nowrap}
 
 /* fleet — cross-graph overview */
+.kpirow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:2px 0 16px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px}
+.kpi .kl{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.kpi .kv{font-family:var(--display);font-size:24px;font-weight:600;letter-spacing:-.01em;line-height:1.1}
+.kpi .ks{font-size:11px;color:var(--muted);margin-top:3px}
+@media(max-width:840px){.kpirow{grid-template-columns:repeat(2,1fr)}}
 .fh{font-family:var(--display);font-size:19px;font-weight:600}
 .fatt{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface);border:1px solid var(--warn);
   border-left:4px solid var(--warn);border-radius:var(--r-lg);padding:11px 14px;margin-bottom:8px;cursor:pointer;box-shadow:var(--shadow)}
@@ -518,6 +436,17 @@ a.copy{text-decoration:none}
 .fsparkwrap{margin-left:auto;display:inline-flex;align-items:flex-end}
 .fspark{display:block}
 @media (max-width:600px){.fgrid{grid-template-columns:1fr}}
+/* fleet — subject groups (path-style graph names, any depth) */
+.fgroup{margin-top:14px}
+.fgroup-head{display:flex;align-items:center;gap:9px;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--border);
+  border-radius:var(--r-lg);background:var(--surface);box-shadow:var(--shadow);cursor:pointer}
+.fgroup-head:hover{background:var(--surface2)}
+.fgroup-head .caret{font-size:10px}
+.fgname{font-family:var(--mono);font-weight:700;font-size:12.5px;letter-spacing:.05em;color:var(--accent-text)}
+.fgsub{color:var(--muted);font-size:11.5px}
+.fgroup-body{margin:10px 0 0 9px;padding-left:13px;border-left:2px solid var(--border)}
+.fgroup .fgrid{margin-top:10px}
+.gdim{color:var(--muted);font-weight:500}
 
 #ptr{position:fixed;top:calc(env(safe-area-inset-top) + 64px);left:50%;transform:translate(-50%,-16px);
   background:var(--surface);border:1px solid var(--border);border-radius:999px;box-shadow:var(--shadow-lg);
@@ -532,6 +461,13 @@ a.copy{text-decoration:none}
 @media (max-width:600px){
   .tr-row{grid-template-columns:1fr 86px}
   .tr-gantt{display:none}
+  /* runs table: drop star(1)/source(4)/tokens(7)/scores(9) so status·run·duration·age fit without scroll */
+  #view-runs th:nth-child(1),#view-runs td:nth-child(1),
+  #view-runs th:nth-child(4),#view-runs td:nth-child(4),
+  #view-runs th:nth-child(7),#view-runs td:nth-child(7),
+  #view-runs th:nth-child(9),#view-runs td:nth-child(9){display:none}
+  #view-runs td,#view-runs th{padding-left:8px;padding-right:8px}
+  .topbar #gpill{max-width:44vw}
 }
 </style>
 </head>
@@ -542,21 +478,29 @@ a.copy{text-decoration:none}
       <svg width="22" height="22" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="var(--accent)"/><g transform="translate(56.0 116.7) scale(0.62893)"><path d="M312.90,425.29 C310.64,423.25 306.72,418.86 304.18,415.54 C301.65,412.22 298.88,408.93 298.03,408.23 C295.97,406.53 289.90,407.25 282.33,410.11 C274.09,413.23 271.34,412.33 268.20,405.50 C262.04,392.12 261.63,391.51 258.52,391.16 C256.88,390.98 253.06,391.35 250.02,391.99 C242.01,393.68 239.51,392.45 236.41,385.25 C230.11,370.65 228.49,369.21 220.40,371.02 C217.79,371.61 214.35,371.80 212.76,371.45 C209.08,370.64 206.01,365.75 206.00,360.69 C206.00,357.52 206.81,356.01 210.82,351.69 C213.47,348.84 217.71,343.80 220.23,340.50 C222.75,337.20 226.92,332.48 229.51,330.00 C232.09,327.52 236.81,322.12 240.01,318.00 C243.20,313.88 249.27,307.12 253.49,303.00 C257.72,298.88 263.24,292.80 265.78,289.50 C268.31,286.20 272.76,280.90 275.66,277.73 C282.46,270.28 283.78,266.15 281.64,258.90 C278.68,248.89 277.41,247.67 267.38,245.23 C260.71,243.60 251.53,239.67 230.50,229.45 C215.10,221.96 200.47,214.74 198.00,213.41 C195.53,212.08 184.95,206.76 174.50,201.60 C164.05,196.44 153.25,191.06 150.50,189.65 C147.75,188.24 137.08,182.79 126.78,177.55 C114.19,171.14 107.49,167.16 106.33,165.38 C104.65,162.82 104.67,162.68 106.91,160.87 C108.24,159.80 110.80,159.00 112.91,159.00 C116.69,159.00 119.00,157.60 119.00,155.31 C119.00,154.60 114.84,151.96 109.75,149.44 C99.17,144.20 67.99,123.81 66.21,120.97 C65.56,119.93 65.31,118.35 65.66,117.45 C66.19,116.07 67.32,115.93 73.06,116.51 C81.49,117.35 84.00,116.65 84.00,113.45 C84.00,111.44 81.40,109.29 68.75,100.84 C52.97,90.30 37.70,78.18 35.86,74.74 C35.05,73.23 35.18,72.40 36.40,71.18 C37.85,69.72 38.96,69.82 49.38,72.36 C62.67,75.61 67.35,75.59 67.81,72.29 C68.05,70.60 65.53,67.46 57.31,59.22 C46.57,48.44 41.78,42.47 40.57,38.36 C39.71,35.46 42.49,32.71 45.36,33.60 C46.53,33.97 60.99,41.01 77.47,49.25 C93.96,57.49 112.41,66.03 118.47,68.23 C146.15,78.27 183.73,90.19 202.92,95.00 C219.11,99.06 221.00,99.92 227.79,106.30 C230.93,109.26 235.53,113.06 238.00,114.75 C240.47,116.45 245.43,120.83 249.00,124.50 C252.57,128.17 257.52,132.55 260.00,134.25 C262.48,135.94 267.05,139.73 270.18,142.66 C277.53,149.58 279.88,149.68 287.17,143.41 C290.10,140.89 295.20,137.43 298.50,135.71 C303.95,132.88 305.53,132.56 315.72,132.19 C331.48,131.62 338.30,133.73 347.42,142.00 C356.10,149.87 358.09,149.94 365.82,142.66 C368.95,139.73 373.52,135.94 376.00,134.25 C378.48,132.55 383.43,128.17 387.00,124.49 C390.57,120.82 395.98,116.11 399.00,114.01 C402.02,111.92 406.07,108.54 408.00,106.51 C412.56,101.70 416.56,99.78 427.50,97.09 C442.99,93.30 489.94,78.25 517.53,68.23 C523.59,66.03 542.04,57.49 558.53,49.25 C575.01,41.01 589.47,33.97 590.64,33.60 C592.03,33.17 593.37,33.51 594.43,34.57 C597.63,37.77 594.44,42.92 579.49,58.73 C573.72,64.83 569.00,70.52 569.00,71.38 C569.00,74.33 572.54,75.17 578.74,73.67 C591.83,70.50 597.95,69.72 599.51,71.01 C603.83,74.59 599.88,78.43 573.00,96.80 C566.67,101.12 558.72,106.13 555.32,107.93 C548.71,111.43 547.22,113.35 549.22,115.76 C550.25,117.00 552.19,117.16 560.13,116.64 C568.29,116.10 569.88,116.24 570.38,117.54 C570.70,118.39 570.44,119.93 569.79,120.97 C568.01,123.81 536.83,144.20 526.25,149.44 C521.16,151.96 517.00,154.60 517.00,155.31 C517.00,157.60 519.31,159.00 523.09,159.00 C525.20,159.00 527.76,159.80 529.09,160.87 C533.98,164.83 532.25,165.87 461.87,201.06 C425.53,219.23 394.15,235.20 392.12,236.54 C388.01,239.26 374.07,244.22 365.58,245.98 C361.45,246.84 359.57,247.82 358.19,249.82 C355.43,253.80 353.00,260.60 353.00,264.32 C353.00,267.82 357.09,275.09 360.98,278.50 C362.23,279.60 365.86,283.88 369.04,288.00 C372.21,292.12 378.27,298.88 382.50,303.00 C386.73,307.12 392.80,313.88 396.00,318.00 C399.19,322.12 404.37,327.98 407.50,331.00 C415.03,338.28 427.28,352.69 429.35,356.70 C431.73,361.32 431.39,364.53 428.13,368.18 C425.01,371.67 422.07,372.14 412.93,370.56 C406.63,369.48 403.40,372.27 401.99,380.00 C400.84,386.26 398.56,389.89 394.54,391.86 C392.28,392.97 390.71,393.00 386.11,392.02 C383.00,391.36 379.12,390.98 377.48,391.16 C374.37,391.51 373.96,392.12 367.80,405.50 C364.66,412.33 361.91,413.23 353.67,410.11 C346.10,407.25 340.03,406.53 337.97,408.23 C337.12,408.93 334.35,412.22 331.82,415.54 C326.95,421.91 319.68,429.00 318.00,429.00 C317.45,429.00 315.16,427.33 312.90,425.29 z M323.60,201.25 C329.52,190.76 330.86,189.21 336.20,186.68 C344.02,182.98 348.00,178.02 348.00,172.00 C348.00,168.25 346.43,165.00 344.62,165.00 C343.90,165.00 340.29,167.93 336.61,171.50 C332.93,175.07 329.50,178.00 328.99,178.00 C328.48,178.00 326.47,180.49 324.52,183.54 C322.57,186.58 320.28,189.34 319.42,189.67 C317.02,190.59 313.64,188.28 310.95,183.86 C308.20,179.35 294.66,167.00 292.47,167.00 C289.94,167.00 287.69,171.70 288.33,175.64 C289.11,180.46 291.29,182.65 298.80,186.21 C305.24,189.26 306.28,190.41 312.40,201.25 C314.64,205.22 315.56,206.00 318.00,206.00 C320.44,206.00 321.36,205.22 323.60,201.25 z" fill="#fff"/></g></svg>
       <span class="wordmark">Windhover<span class="species">LangGraph observability</span></span>
     </div>
+    <div class="nav-sec">Observe</div>
     <nav class="nav">
-      <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet} Fleet</button>
+      <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet} Overview</button>
       <button data-v="graph" class="on">${ICON.graph} Graph</button>
       <button data-v="runs">${ICON.list} Runs</button>
       <button data-v="sessions">${ICON.layers} Sessions</button>
-      <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
-      <button data-v="stats">${ICON.chart} Stats</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><a href="https://buymeacoffee.com/justfeltlikerunning" target="_blank" rel="noopener" title="Buy me a coffee" style="text-decoration:none;filter:grayscale(35%)">☕</a><span class="mono" id="ver">v0.14</span></div>
+    <div class="nav-sec">Analyze</div>
+    <nav class="nav">
+      <button data-v="stats">${ICON.chart} Stats</button>
+      <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
+    </nav>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><a href="https://buymeacoffee.com/justfeltlikerunning" target="_blank" rel="noopener" title="Buy me a coffee" style="text-decoration:none;filter:grayscale(35%)">☕</a><span class="mono" id="ver">v0.31</span></div>
   </aside>
 
   <main>
     <div class="topbar">
       <span class="crumb" id="crumb">Graph</span>
       <span class="pill" id="gpill"><span class="live-dot"></span><span class="plabel">graph</span><span id="gname">—</span><select id="gsel" style="display:none"></select></span>
+      <div class="spacer"></div>
+      <button id="palette-btn" class="palette-trigger" onclick="openPalette()" title="Search (⌘K)">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <span class="pt-label">Search runs, prompts, errors…</span><span class="pt-kbd">⌘K</span></button>
       <div class="spacer"></div>
       <button class="icon-btn" id="alerts-btn" title="Enable alerts on this device" style="display:none">🔔</button>
       <button class="icon-btn" id="theme" title="theme">${ICON.moon}</button>
@@ -568,8 +512,13 @@ a.copy{text-decoration:none}
         <div class="graph-tools">
           <span class="mono" id="allnote" style="display:none;color:var(--muted);font-size:11px;padding:6px 4px"></span>
           <button class="btn ghost" onclick="cy&&cy.fit(undefined,50)">Fit</button>
-          <button class="btn ghost" onclick="relayout()">Layout</button>
+          <button class="btn ghost" id="relayoutbtn" onclick="relayout()">Layout</button>
           <button class="btn ghost" id="orient" onclick="toggleOrient()">⇅ Vertical</button>
+          <button class="btn ghost" id="collapseall" style="display:none" onclick="collapseAllGroups()">⊟ Collapse all</button>
+          <button class="btn ghost" id="lundo" style="display:none" title="Undo move" onclick="layoutUndo()">↶</button>
+          <button class="btn ghost" id="lredo" style="display:none" title="Redo move" onclick="layoutRedo()">↷</button>
+          <button class="btn ghost" id="lsave" style="display:none" title="Save this arrangement" onclick="saveLayout()">⭳ Save</button>
+          <button class="btn ghost" id="lreset" style="display:none" title="Reset to auto-layout" onclick="resetLayout()">⟲ Reset</button>
           <button class="btn ghost" id="xray" style="display:none" onclick="toggleXray()">◉ X-ray</button>
         </div>
         <div class="legend">
@@ -580,23 +529,28 @@ a.copy{text-decoration:none}
         </div>
       </div>
       <div id="view-runs" style="display:none">
-        <div class="page">
-          <div class="page-head"><h1>Runs</h1><span class="sub" id="runs-sub"></span></div>
-          <div class="rtools">
-            <input type="search" id="rq" placeholder="Search payloads, prompts, errors…">
-            <select id="rgraph" style="display:none"></select>
-            <select id="rstatus"><option value="">All statuses</option>
-              <option value="done">done</option><option value="error">error</option>
-              <option value="interrupted">interrupted</option>
-              <option value="running">running</option></select>
-            <button class="btn ghost" id="rbook" title="only bookmarked">★</button>
-            <span id="rf-active"></span>
-            <span class="spacer"></span>
-            <button class="btn ghost" onclick="exportRuns('csv')">CSV</button>
-            <button class="btn ghost" onclick="exportRuns('json')">JSON</button>
+        <div class="runs-split">
+          <div class="runs-main">
+            <div class="page">
+              <div class="page-head"><h1>Runs</h1><span class="sub" id="runs-sub"></span></div>
+              <div class="rtools">
+                <input type="search" id="rq" placeholder="Search payloads, prompts, errors…">
+                <select id="rgraph" style="display:none"></select>
+                <select id="rstatus"><option value="">All statuses</option>
+                  <option value="done">done</option><option value="error">error</option>
+                  <option value="interrupted">interrupted</option>
+                  <option value="running">running</option></select>
+                <button class="btn ghost" id="rbook" title="only bookmarked">★</button>
+                <span id="rf-active"></span>
+                <span class="spacer"></span>
+                <button class="btn ghost" onclick="exportRuns('csv')">CSV</button>
+                <button class="btn ghost" onclick="exportRuns('json')">JSON</button>
+              </div>
+              <div class="card"><div id="runs-wrap"><div class="empty">Loading…</div></div></div>
+              <div class="pager" id="pager"></div>
+            </div>
           </div>
-          <div class="card"><div id="runs-wrap"><div class="empty">Loading…</div></div></div>
-          <div class="pager" id="pager"></div>
+          <div id="runs-detail-slot" class="runs-detail" style="display:none"></div>
         </div>
       </div>
       <div id="view-sessions" style="display:none">
@@ -623,7 +577,7 @@ a.copy{text-decoration:none}
       </div>
       <div id="view-fleet" style="display:none">
         <div class="page">
-          <div class="page-head"><h1>Fleet</h1><span class="sub">every graph, one glance</span></div>
+          <div class="page-head"><h1>Overview</h1><span class="sub">every graph, one glance</span></div>
           <div id="fleet-body"><div class="empty">Loading…</div></div>
         </div>
       </div>
@@ -632,12 +586,12 @@ a.copy{text-decoration:none}
 </div>
 
 <div class="bottom-nav">
-  <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet}<span>Fleet</span></button>
+  <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet}<span>Overview</span></button>
   <button data-v="graph" class="on">${ICON.graph}<span>Graph</span></button>
   <button data-v="runs">${ICON.list}<span>Runs</span></button>
   <button data-v="sessions">${ICON.layers}<span>Sessions</span></button>
-  <button data-v="memory" class="nav-mem" style="display:none">${ICON.mem}<span>Memory</span></button>
   <button data-v="stats">${ICON.chart}<span>Stats</span></button>
+  <button data-v="memory" class="nav-mem" style="display:none">${ICON.mem}<span>Memory</span></button>
 </div>
 
 <div class="scrim" id="scrim" onclick="closeAll()"></div>
@@ -683,6 +637,16 @@ a.copy{text-decoration:none}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="pal-scrim" id="pal-scrim" onclick="closePalette()"></div>
+<div class="pal" id="pal">
+  <div class="pal-head">
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+    <input id="pal-input" placeholder="Search runs, views, graphs…" spellcheck="false" autocomplete="off">
+    <span class="pt-kbd">esc</span>
+  </div>
+  <div class="pal-list" id="pal-list"></div>
+</div>
 
 <script>
 /* ---------- icons ---------- */
@@ -737,40 +701,109 @@ function cyStyle(){ return [
    'font-family':'ui-monospace, Menlo, Consolas, monospace','color':cssv('--text2'),
    'text-background-color':cssv('--bg'),'text-background-opacity':.9,'text-background-padding':2}},
  {selector:'edge.flow',style:{'line-color':cssv('--accent'),'target-arrow-color':cssv('--accent'),'width':2.4}},
+ /* all-graphs canvas: each graph is a labelled compound box (watermark title) */
+ {selector:'node.grp',style:{'shape':'round-rectangle','label':'data(label)','padding':24,/*=GRP_PAD*/
+   'text-valign':'top','text-halign':'center','text-margin-y':2,'text-wrap':'none',
+   'font-family':cssv('--display')||'Georgia,serif','font-weight':700,'font-size':13.5,
+   'text-transform':'none','color':cssv('--text2'),
+   'text-background-color':cssv('--surface'),'text-background-opacity':1,
+   'text-background-padding':4,'text-background-shape':'roundrectangle',
+   'background-color':cssv('--accent'),'background-opacity':0.05,
+   'border-width':1.5,'border-color':cssv('--border2'),'border-style':'dashed'}},
+ {selector:'node.grp:childless',style:{'width':200,'height':56,'background-opacity':0.12,
+   'border-style':'solid','text-valign':'center','color':cssv('--text'),'font-size':13.5}},
+ {selector:'node.grp.gerr',style:{'border-color':cssv('--err')}},
+ /* subject boxes wrap graphs (and sub-subjects) — the hierarchy, any depth */
+ {selector:'node.subj',style:{'shape':'round-rectangle','label':'data(label)','padding':34,/*=SUBJ_PAD*/
+   'text-valign':'top','text-halign':'center','text-margin-y':2,'text-wrap':'none',
+   'font-family':cssv('--display')||'Georgia,serif','font-weight':700,'font-size':15,
+   'color':cssv('--accent-text'),
+   'text-background-color':cssv('--surface'),'text-background-opacity':1,
+   'text-background-padding':5,'text-background-shape':'roundrectangle',
+   'background-color':cssv('--accent'),'background-opacity':0.06,
+   'border-width':1.5,'border-color':cssv('--accent'),'border-opacity':0.5,'border-style':'solid'}},
+ {selector:'node.subj:childless',style:{'width':210,'height':56,'background-opacity':0.16,
+   'text-valign':'center','font-size':14,'border-opacity':0.9}},
+ /* live status on the combined board — a graph/subject box that is running now */
+ {selector:'node.grp.run, node.subj.run',style:{'border-color':cssv('--accent'),
+   'border-width':3,'border-opacity':1,'border-style':'solid','background-opacity':0.14}},
+ {selector:'node.grp.run.pon, node.subj.run.pon',style:{'border-width':5.5}},
+ {selector:'node.grp.wait, node.subj.wait',style:{'border-color':cssv('--warn'),
+   'border-width':3,'border-opacity':1,'border-style':'solid','background-opacity':0.14}},
 ];}
 function applyCyStyle(){ cy.style(cyStyle()); }
 
 /* ---------- graph ---------- */
-let GSEL=localStorage.getItem('wh-graph')||'';                 // ''=All graphs (multi-graph)
+let GSEL=localStorage.getItem('wh-graph')||'';                 // ''=All · name=one graph · "a/b/*"=subject scope
 let GLAST=localStorage.getItem('wh-graph-last')||'';           // last concrete pick — canvas/memory fallback
 function gAll(){ return multiGraph()&&!GSEL; }
-function gconc(){ return GSEL||GLAST||''; }                    // a concrete graph for views that need one
+function gGroupSel(){ return GSEL.endsWith('/*'); }
+function gInScope(name,scope){ // scope: ''=all · "x/*"=subject subtree · else exact
+  if(!scope) return true;
+  if(scope.endsWith('/*')){ const p=scope.slice(0,-2); return name===p||name.startsWith(p+'/'); }
+  return name===scope;
+}
+function gconc(){                                              // a concrete graph for views that need one
+  if(GSEL&&!gGroupSel()) return GSEL;
+  const l=window.__graphList||[];
+  if(l.includes(GLAST)&&gInScope(GLAST,GSEL)) return GLAST;
+  return l.find(g=>gInScope(g,GSEL))||GLAST||'';
+}
 function gparamC(pfx){ const g=gconc(); return g?pfx+'graph='+encodeURIComponent(g):''; }
+/* graph groups: path-style names ("a/b/c") form a subject tree of any depth */
+function gtree(names){
+  const root={groups:{},leaves:[]};
+  for(const n of names){
+    const parts=n.split('/'); let cur=root;
+    for(let i=0;i<parts.length-1;i++) cur=cur.groups[parts[i]]=cur.groups[parts[i]]||{groups:{},leaves:[]};
+    cur.leaves.push(n);
+  }
+  return root;
+}
+function gcount(node){ let c=node.leaves.length; for(const k in node.groups) c+=gcount(node.groups[k]); return c; }
+function gflat(node,prefix,depth,out){ // DFS -> [{value,label,depth,group,count}]
+  out=out||[];
+  for(const g of Object.keys(node.groups).sort()){
+    const kid=node.groups[g], pfx=prefix?prefix+'/'+g:g;
+    out.push({value:pfx+'/*',label:g+'/',depth,group:true,count:gcount(kid)});
+    gflat(kid,pfx,depth+1,out);
+  }
+  for(const n of node.leaves.slice().sort())
+    out.push({value:n,label:n.split('/').pop(),depth,group:false});
+  return out;
+}
+function gOptions(selected){ // tree-shaped <option> list; groups select a "…/*" scope
+  const items=gflat(gtree(window.__graphList||[]),'',0);
+  const pad=d=>'   '.repeat(d);
+  return `<option value="" ${selected===''?'selected':''}>All graphs</option>`+
+    items.map(o=>`<option value="${esc(o.value)}" ${o.value===selected?'selected':''}>`+
+      `${pad(o.depth)}${o.group?'▸ ':''}${esc(o.label)}${o.group?' ('+o.count+')':''}</option>`).join('');
+}
+function gnameHtml(g){ // muted path prefix, bold leaf — "ops/etl/" + "nightly"
+  if(!g) return 'run';
+  const i=g.lastIndexOf('/'); if(i<0) return esc(g);
+  return `<span class="gdim">${esc(g.slice(0,i+1))}</span>${esc(g.slice(i+1))}`;
+}
 async function loadGraphList(){
   try{
     const d=await(await fetch('/api/graphs')).json();
     window.__graphList=d.graphs||[];
     const multi=window.__graphList.length>1;
     // ''=All graphs is only meaningful multi-graph; otherwise snap to a real one
-    if(GSEL!==''||!multi){ if(!window.__graphList.includes(GSEL)) GSEL=d.default||''; }
-    if(!window.__graphList.includes(GLAST)) GLAST=GSEL||d.default||'';
+    const validScope=g=>g.endsWith('/*')?window.__graphList.some(n=>gInScope(n,g))
+                                        :window.__graphList.includes(g);
+    if(!multi){ if(!window.__graphList.includes(GSEL)) GSEL=d.default||''; }
+    else if(GSEL&&!validScope(GSEL)) GSEL=d.default||'';
+    if(!window.__graphList.includes(GLAST)) GLAST=(GSEL&&!gGroupSel()?GSEL:'')||d.default||'';
     const sel=$('#gsel');
     if(multi){
       $$('.nav-fleet').forEach(b=>b.style.display='');   // fleet view only makes sense multi-graph
       sel.style.display=''; $('#gname').style.display='none';
-      sel.innerHTML=`<option value="" ${GSEL===''?'selected':''}>All graphs</option>`+
-        window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
-      sel.onchange=()=>{ GSEL=sel.value; localStorage.setItem('wh-graph',GSEL);
-        if(GSEL){ GLAST=GSEL; localStorage.setItem('wh-graph-last',GLAST); }
-        RF.graph=GSEL; const rg=$('#rgraph'); if(rg) rg.value=GSEL;
-        loadGraph(true); probeMemory();
-        if(VIEW==='memory') loadMemory();
-        if(VIEW==='runs') loadRuns();
-        if(VIEW==='sessions') loadSessions();
-        if(VIEW==='stats'){ loadStats(); loadDatasets(); } };
+      sel.innerHTML=gOptions(GSEL);
+      sel.onchange=()=>selectGraph(sel.value);
       const rg=$('#rgraph');
       if(rg){ rg.style.display='';
-        rg.innerHTML='<option value="">All graphs</option>'+window.__graphList.map(g=>`<option>${esc(g)}</option>`).join('');
+        rg.innerHTML=gOptions(GSEL);
         RF.graph=GSEL; rg.value=GSEL;
         rg.onchange=e=>{RF.graph=e.target.value;RF.offset=0;loadRuns();}; }
     }
@@ -782,25 +815,244 @@ function gparam(pfx){ return GSEL?pfx+'graph='+encodeURIComponent(GSEL):''; }
 function rgparam(){ const g=(window.__run||{}).graph||GSEL; return g?'graph='+encodeURIComponent(g):''; }
 let XRAY=false;
 window.toggleXray=()=>{ XRAY=!XRAY; const b=$('#xray'); if(b)b.classList.toggle('on',XRAY); loadGraph(true); };
+
+/* which graphs the canvas should draw: [] none · [one] single · [many] combined */
+function scopeGraphs(){
+  const l=window.__graphList||[];
+  if(!multiGraph()) return l.length?[l[0]]:[];
+  if(gAll()) return l.slice();
+  if(gGroupSel()) return l.filter(n=>gInScope(n,GSEL));
+  return [gconc()].filter(Boolean);
+}
+function singleCanvas(){ return !!cy && cy.nodes('.grp').length===0; }
+
+/* pick one concrete graph and drop into its single-graph canvas (used when a
+   run needs to animate, or the user taps into a graph) */
+async function selectGraph(val){
+  GSEL=val; localStorage.setItem('wh-graph',GSEL);
+  if(GSEL&&!gGroupSel()){ GLAST=GSEL; localStorage.setItem('wh-graph-last',GLAST); }
+  const sel=$('#gsel'); if(sel&&sel.value!==GSEL) sel.innerHTML=gOptions(GSEL);
+  RF.graph=GSEL; const rg=$('#rgraph'); if(rg){ rg.innerHTML=gOptions(GSEL); rg.value=GSEL; }
+  await loadGraph(true); probeMemory();
+  if(VIEW==='memory') loadMemory();
+  if(VIEW==='runs') loadRuns();
+  if(VIEW==='sessions') loadSessions();
+  if(VIEW==='stats'){ loadStats(); loadDatasets(); }
+}
+async function focusGraph(name){ if(name) await selectGraph(name); }
+
 async function loadGraph(force){
-  const t=await(await fetch('/api/graph?'+gparamC(''))).json();
+  const list=scopeGraphs();
+  if(list.length>1) return loadGraphCombined(list,force);
+  const one=list[0]||'';
+  const t=await(await fetch('/api/graph?'+(one?'graph='+encodeURIComponent(one):''))).json();
   $('#gname').textContent=t.graph||'ingest-only';
-  const an=$('#allnote');  // in All-graphs scope the canvas shows one concrete graph
-  if(an){ an.style.display=gAll()?'':'none'; if(gAll()) an.textContent='canvas: '+(gconc()||t.graph||''); }
+  const an=$('#allnote');
+  if(an){ const scoped=gGroupSel(); an.style.display=scoped?'':'none';
+    if(scoped) an.textContent='scope '+GSEL; }
   const xb=$('#xray'); if(xb) xb.style.display=t.xray?'':'none';
+  const ca=$('#collapseall'); if(ca) ca.style.display='none';
+  _layoutBtns(false);   // save/undo/redo/reset are for the multi-graph board only
+  stopCombinedLive();   // single-graph canvas has its own run animation
   if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
   const topo=(XRAY&&t.xray)?t.xray:t;
   window.__nodes=Object.fromEntries(topo.nodes.map(n=>[n.id,n]));
   const els=[];
   topo.nodes.forEach(n=>els.push({data:{id:n.id,label:n.label,terminal:n.terminal?1:undefined}}));
   topo.edges.forEach(e=>els.push({data:{id:e.id,source:e.source,target:e.target,conditional:e.conditional?1:undefined,label:e.label||undefined}}));
-  if(cy&&!force){return;}
   cy=cytoscape({container:$('#cy'),elements:els,style:cyStyle(),
     layout:layoutOpts(),minZoom:.2,maxZoom:3,wheelSensitivity:.12});
   cy.on('tap','node',ev=>{ const n=ev.target; if(!n.data('terminal')) openNode(n.id()); });
   cy.on('mouseover','node',ev=>{ if(!ev.target.data('terminal')) $('#cy').style.cursor='pointer'; });
   cy.on('mouseout','node',()=>{ $('#cy').style.cursor=''; });
 }
+
+/* ---------- all-graphs canvas — nested subject boxes, each roll-up-able ---------- */
+const COLLAPSED=new Set(JSON.parse(localStorage.getItem('wh-collapsed')||'[]'));
+function saveCollapsed(){ localStorage.setItem('wh-collapsed',JSON.stringify([...COLLAPSED])); }
+window.toggleGroup=(key)=>{ COLLAPSED.has(key)?COLLAPSED.delete(key):COLLAPSED.add(key); saveCollapsed(); loadGraph(true); };
+window.collapseAllGroups=()=>{
+  // collapse every TOP-LEVEL item (subjects + ungrouped graphs) to chips, or
+  // expand the whole board if it's already fully collapsed
+  const root=gtree(scopeGraphs());
+  const tops=[...Object.keys(root.groups), ...root.leaves];
+  const anyOpen=tops.some(k=>!COLLAPSED.has(k));
+  if(anyOpen) tops.forEach(k=>COLLAPSED.add(k)); else COLLAPSED.clear();
+  saveCollapsed(); loadGraph(true);
+};
+window.__TOPO={};
+
+async function loadGraphCombined(list,force){
+  $('#gname').textContent=GSEL||'all graphs';
+  const an=$('#allnote'); if(an){ an.style.display='';
+    an.innerHTML=`${list.length} graphs · tap a title to roll up/down`+(gGroupSel()?'  ·  '+esc(GSEL):''); }
+  const xb=$('#xray'); if(xb) xb.style.display='none';
+  const root0=gtree(list), tops0=[...Object.keys(root0.groups),...root0.leaves];
+  const ca=$('#collapseall'); if(ca){ ca.style.display='';
+    ca.textContent=tops0.every(k=>COLLAPSED.has(k))?'⊞ Expand all':'⊟ Collapse all'; }
+  const topos=await Promise.all(list.map(g=>
+    fetch('/api/graph?graph='+encodeURIComponent(g)).then(r=>r.json()).catch(()=>null)));
+  window.__TOPO=Object.fromEntries(list.map((g,i)=>[g,topos[i]]));
+  const els=[]; window.__nodes={};
+  buildCombinedEls(gtree(list),'',undefined,els);
+  cy=cytoscape({container:$('#cy'),elements:els,style:cyStyle(),
+    layout:{name:'preset'},minZoom:.05,maxZoom:3,wheelSensitivity:.12});
+  cy.on('tap','.subj',ev=>toggleGroup(ev.target.data('sid')));
+  cy.on('tap','.grp',ev=>toggleGroup(ev.target.data('gname')));
+  cy.on('tap','.gnode',ev=>{ const n=ev.target; if(!n.data('terminal')) openNode(n.data('nname'),n.data('graph'),n); });
+  cy.on('mouseover','.subj,.grp,.gnode',()=>{ $('#cy').style.cursor='pointer'; });
+  cy.on('mouseout','node',()=>{ $('#cy').style.cursor=''; });
+  cy.on('dragfree','node',()=>_histPush());   // record each reposition for undo/redo
+  layoutNested();
+  const saved=_savedLayout();
+  if(saved){ _posApply(saved); cy.fit(undefined,40); }   // restore a saved arrangement
+  _layoutBtns(true); _histReset();
+  startCombinedLive();
+}
+
+/* live status on the nested board: poll the fleet overview and light up graph
+   & subject boxes that are running (teal, pulsing) or awaiting a human (amber),
+   rolling counts up the subject tree — so a sequence of runs lights boxes in turn */
+let __liveT2=null,__liveN=0,__pon=false;
+function stopCombinedLive(){ if(__liveT2){ clearInterval(__liveT2); __liveT2=null; } }
+function startCombinedLive(){ stopCombinedLive(); __liveN=0;
+  combinedLiveTick();
+  __liveT2=setInterval(()=>{ __liveN++;
+    if(!cy||singleCanvas()||VIEW!=='graph'){ return; }
+    if(__liveN%2===0) combinedLiveTick();      // refetch ~every 1.4s
+    __pon=!__pon; cy.nodes('.run').forEach(n=>n.toggleClass('pon',__pon)); // pulse
+  },700);
+}
+async function combinedLiveTick(){
+  if(!cy||singleCanvas()||VIEW!=='graph') return;
+  let ov; try{ ov=await(await fetch('/api/overview')).json(); }catch(e){ return; }
+  const rows=ov.graphs||[];
+  const paint=(node,run,wait,extra)=>{
+    node.removeClass('run wait pon');
+    if(run) node.addClass('run'); else if(wait) node.addClass('wait');
+    const base=node.data('blabel')||'';
+    node.data('label', base+(run?`  ●${extra>1?' '+extra:''}`:wait?`  ⏸${extra>1?' '+extra:''}`:''));
+  };
+  cy.nodes('.grp').forEach(p=>{ const s=rows.find(g=>g.name===p.data('gname'))||{};
+    paint(p, s.running_now>0, s.interrupted_now>0, Math.max(s.running_now||0,s.interrupted_now||0)); });
+  cy.nodes('.subj').forEach(sb=>{ const pfx=sb.data('sid'); let run=0,wait=0;
+    rows.forEach(g=>{ if(g.name===pfx||g.name.startsWith(pfx+'/')){ run+=g.running_now||0; wait+=g.interrupted_now||0; }});
+    paint(sb, run>0, wait>0, run||wait); });
+}
+
+/* recursively emit compound boxes: subject → sub-subjects/graphs → nodes */
+function buildCombinedEls(node,prefix,parentId,els){
+  Object.keys(node.groups).sort().forEach(key=>{
+    const pfx=prefix?prefix+'/'+key:key, sid='sub::'+pfx, collapsed=COLLAPSED.has(pfx);
+    const slabel=(collapsed?'▸ ':'▾ ')+pfx+(collapsed?` · ${gcount(node.groups[key])}`:'');
+    els.push({data:{id:sid,sid:pfx,parent:parentId,collapsed:collapsed?1:undefined,
+      label:slabel,blabel:slabel},classes:'subj'});
+    if(!collapsed) buildCombinedEls(node.groups[key],pfx,sid,els);
+  });
+  node.leaves.slice().sort().forEach(g=>{
+    const gid='grp::'+g, t=window.__TOPO[g], real=(t&&t.nodes)||[];
+    const collapsed=COLLAPSED.has(g)||!real.length;
+    const glabel=(collapsed?'▸ ':'▾ ')+g.split('/').pop()+(collapsed?` · ${real.length}`:'');
+    els.push({data:{id:gid,gname:g,parent:parentId,collapsed:collapsed?1:undefined,
+      label:glabel,blabel:glabel},classes:'grp'});
+    if(collapsed) return;
+    real.forEach(n=>{ const nid=g+'::'+n.id; window.__nodes[nid]={...n,graph:g};
+      els.push({data:{id:nid,parent:gid,nname:n.id,graph:g,label:n.label,
+        terminal:n.terminal?1:undefined},classes:'gnode'}); });
+    (t.edges||[]).forEach(e=>els.push({data:{id:g+'::'+e.id,source:g+'::'+e.source,
+      target:g+'::'+e.target,conditional:e.conditional?1:undefined,label:e.label||undefined}}));
+  });
+}
+
+/* nested layout: measure the subject tree bottom-up (pass 1), then place leaf
+   nodes / collapsed chips into absolute coords (pass 2). Every box auto-sizes
+   from its descendants, so nesting is exact. */
+const GAP=42, GRP_PAD=24, SUBJ_PAD=34;
+function _titleW(label,fs){ return (label||'').length*fs*0.6+34; }
+function _packItems(items,maxInner){   // assigns .ox/.oy, returns {w,h}
+  let cx=0,cy0=0,rowH=0,w=0;
+  items.forEach(it=>{
+    if(cx>0 && cx+it.w>maxInner){ cx=0; cy0+=rowH+GAP; rowH=0; }
+    it.ox=cx; it.oy=cy0; cx+=it.w+GAP; rowH=Math.max(rowH,it.h); w=Math.max(w,cx-GAP);
+  });
+  return {w, h:cy0+rowH};
+}
+function _measureGraph(g){
+  if(COLLAPSED.has(g)||!(window.__TOPO[g]&&(window.__TOPO[g].nodes||[]).length))
+    return {type:'grpChip',g,w:Math.max(200,_titleW(g.split('/').pop(),13.5)),h:56};
+  const kids=cy.getElementById('grp::'+g).children();
+  kids.union(kids.edgesWith(kids))
+    .layout({name:'dagre',rankDir:RANK,nodeSep:20,rankSep:40,fit:false,animate:false}).run();
+  const bb=kids.boundingBox();
+  return {type:'graph',g,bb,w:Math.max(bb.w,_titleW(g.split('/').pop(),13.5))+GRP_PAD*2,h:bb.h+GRP_PAD*2};
+}
+function _measureNode(node,prefix,maxInner){
+  const items=[];
+  node.leaves.slice().sort().forEach(g=>items.push(_measureGraph(g)));
+  Object.keys(node.groups).sort().forEach(k=>{ const pfx=prefix?prefix+'/'+k:k;
+    if(COLLAPSED.has(pfx)) items.push({type:'subjChip',prefix:pfx,
+      w:Math.max(210,_titleW(pfx+' · '+gcount(node.groups[k]),13.5)),h:56});
+    else items.push(_measureNode(node.groups[k],pfx,maxInner)); });
+  const pk=_packItems(items,maxInner);
+  return {type:'subject',prefix,items,
+    w:Math.max(pk.w,_titleW(prefix,15))+SUBJ_PAD*2, h:pk.h+SUBJ_PAD*2};
+}
+function _apply(m,x,y){
+  if(m.type==='subject'){ m.items.forEach(it=>_apply(it,x+SUBJ_PAD+it.ox,y+SUBJ_PAD+it.oy)); }
+  else if(m.type==='graph'){ const kids=cy.getElementById('grp::'+m.g).children();
+    const interiorW=m.w-GRP_PAD*2;
+    kids.shift({x:x+GRP_PAD+(interiorW-m.bb.w)/2-m.bb.x1, y:y+GRP_PAD-m.bb.y1}); }
+  else if(m.type==='grpChip'){ cy.getElementById('grp::'+m.g).position({x:x+m.w/2,y:y+m.h/2}); }
+  else if(m.type==='subjChip'){ cy.getElementById('sub::'+m.prefix).position({x:x+m.w/2,y:y+m.h/2}); }
+}
+function layoutNested(){
+  if(!cy) return;
+  const maxInner=Math.max((cy.width()||1200)*1.3,1100);
+  const root=gtree(scopeGraphs());
+  const items=[];
+  root.leaves.slice().sort().forEach(g=>items.push(_measureGraph(g)));
+  Object.keys(root.groups).sort().forEach(k=>{
+    if(COLLAPSED.has(k)) items.push({type:'subjChip',prefix:k,
+      w:Math.max(210,_titleW(k+' · '+gcount(root.groups[k]),13.5)),h:56});
+    else items.push(_measureNode(root.groups[k],k,maxInner)); });
+  _packItems(items,maxInner);
+  items.forEach(it=>_apply(it,it.ox,it.oy));
+  cy.fit(undefined,40);
+}
+
+/* ---------- manual layout: drag boxes, save, undo/redo, reset ----------
+   diagnosing is easier when the board keeps the shape you gave it. We snapshot
+   the positions of the movable elements (nodes + collapsed chips); parent boxes
+   auto-follow their descendants. History is per view; Save persists to
+   localStorage keyed by scope+orientation so it survives reloads. */
+function _layoutKey(){ return 'wh-layout:'+(GSEL||'all')+':'+RANK; }
+function _posSnapshot(){ const m={};
+  cy.nodes('.gnode, .grp:childless, .subj:childless').forEach(n=>{
+    const p=n.position(); m[n.id()]={x:Math.round(p.x),y:Math.round(p.y)}; });
+  return m; }
+function _posApply(snap){ if(!snap) return; cy.batch(()=>{
+  cy.nodes('.gnode, .grp:childless, .subj:childless').forEach(n=>{
+    const p=snap[n.id()]; if(p) n.position({x:p.x,y:p.y}); }); }); }
+function _savedLayout(){ try{ return JSON.parse(localStorage.getItem(_layoutKey())||'null'); }catch(e){ return null; } }
+let LUNDO=[], LREDO=[];
+function _histBtns(){ const u=$('#lundo'),r=$('#lredo');
+  if(u) u.disabled=LUNDO.length<2; if(r) r.disabled=!LREDO.length; }
+function _histReset(){ LUNDO=cy?[_posSnapshot()]:[]; LREDO=[]; _histBtns(); }
+function _histPush(){ LREDO=[]; LUNDO.push(_posSnapshot());
+  if(LUNDO.length>80) LUNDO.shift(); _histBtns(); }
+window.layoutUndo=()=>{ if(LUNDO.length<2) return; LREDO.push(LUNDO.pop());
+  _posApply(LUNDO[LUNDO.length-1]); _histBtns(); toast('Undo'); };
+window.layoutRedo=()=>{ if(!LREDO.length) return; const s=LREDO.pop();
+  LUNDO.push(s); _posApply(s); _histBtns(); toast('Redo'); };
+window.saveLayout=()=>{ if(!cy) return;
+  localStorage.setItem(_layoutKey(), JSON.stringify(_posSnapshot()));
+  const b=$('#lsave'); if(b){ b.textContent='✓ Saved'; setTimeout(()=>b.textContent='⭳ Save',1400); }
+  toast('Layout saved for '+(GSEL||'all graphs')+' · '+(RANK==='TB'?'vertical':'horizontal')); };
+window.resetLayout=()=>{ localStorage.removeItem(_layoutKey());
+  layoutNested(); _histReset(); toast('Layout reset to auto'); };
+function _layoutBtns(show){ ['lundo','lredo','lsave','lreset'].forEach(id=>{
+  const b=$('#'+id); if(b) b.style.display=show?'':'none'; }); if(show) _histBtns(); }
+
 /* middle-button drag pans the graph (and suppress the browser's autoscroll) */
 (()=>{ const cont=$('#cy'); if(!cont) return;
   cont.addEventListener('mousedown',e=>{ if(e.button!==1||!cy) return; e.preventDefault();
@@ -815,9 +1067,14 @@ async function loadGraph(force){
 
 let RANK=localStorage.getItem('wh-rank')||'TB';
 function layoutOpts(){ return {name:'dagre',rankDir:RANK,nodeSep:30,rankSep:56}; }
-function relayout(){ if(cy){ cy.layout(layoutOpts()).run(); cy.fit(undefined,50); } }
+function relayout(){ if(!cy)return;
+  if(!singleCanvas()){ layoutNested(); if(LUNDO.length) _histPush(); }  // auto re-pack, undoable
+  else{ cy.layout(layoutOpts()).run(); cy.fit(undefined,50); } }
 function orientLabel(){ const b=$('#orient'); if(b) b.textContent=RANK==='TB'?'⇅ Vertical':'⇄ Horizontal'; }
-window.toggleOrient=()=>{ RANK=RANK==='TB'?'LR':'TB'; localStorage.setItem('wh-rank',RANK); orientLabel(); relayout(); };
+window.toggleOrient=()=>{ RANK=RANK==='TB'?'LR':'TB'; localStorage.setItem('wh-rank',RANK); orientLabel();
+  if(cy&&!singleCanvas()){ layoutNested();               // each orientation keeps its own saved arrangement
+    const s=_savedLayout(); if(s){ _posApply(s); cy.fit(undefined,40); } _histReset(); }
+  else relayout(); };
 orientLabel();
 
 /* ---------- source viewer helpers ---------- */
@@ -848,17 +1105,20 @@ function codeBlock(src,hi){ const lines=src.code.replace(/\n$/,'').split('\n');
   }).join('')}</div>`; }
 
 /* ---------- node pane (tap a node on the graph) ---------- */
-async function openNode(name){
+async function openNode(name,graphOverride,el){
   clearTimeout(window.__liveT); window.__run=null;
   let d={}; try{ d=await(await fetch('/api/nodes/'+encodeURIComponent(name))).json(); }catch(e){}
-  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source?'+gparamC(''));
+  const gq=graphOverride?'graph='+encodeURIComponent(graphOverride):gparamC('');
+  let src=null; try{ const rs=await fetch('/api/nodes/'+encodeURIComponent(name)+'/source?'+gq);
     if(rs.ok) src=await rs.json(); }catch(e){}
   const s=d.summary||{}, errs=s.errors||0;
-  $('#d-title').textContent=name;
+  $('#d-title').textContent=(graphOverride?graphOverride+' · ':'')+name;
   const st=$('#d-status'); st.className='status '+(errs?'error':'done');
   $('#d-status-t').textContent=errs?errs+' error'+(errs>1?'s':''):'healthy';
-  const inn=cy?cy.edges(`[target="${name}"]`).map(e=>e.source().id()):[];
-  const out=cy?cy.edges(`[source="${name}"]`).map(e=>e.target().id()):[];
+  // combined canvas: derive wiring from the tapped element (ids are namespaced)
+  const nn=e=>e.data('nname')||e.id();
+  const inn=el?el.incomers('node').map(nn):(cy?cy.edges(`[target="${name}"]`).map(e=>e.source().id()):[]);
+  const out=el?el.outgoers('node').map(nn):(cy?cy.edges(`[source="${name}"]`).map(e=>e.target().id()):[]);
   $('#d-meta').innerHTML=[
     `<span><b class="num">${s.n||0}</b> executions</span>`,
     s.avg_ms!=null?`<span><b>${fmtms(Math.round(s.avg_ms))}</b> avg</span>`:'',
@@ -905,7 +1165,7 @@ async function openNode(name){
       </div></div>`;
   }).join(''):'<div class="empty">No recorded executions of this node yet</div>';
   $('#d-body').innerHTML=html;
-  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+  openDrawer('float');
 }
 function liveTopology(){ try{ const es=new EventSource('/api/events'+(whToken()?'?token='+encodeURIComponent(whToken()):''));
   es.addEventListener('topology',async()=>{ await loadGraph(true); toast('Graph definition changed — view updated'); });
@@ -917,9 +1177,13 @@ function liveTopology(){ try{ const es=new EventSource('/api/events'+(whToken()?
 function switchView(v){ VIEW=v;
   if(location.hash!=='#'+v) history.replaceState(null,'','#'+v);
   $$('.nav button,.bottom-nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
-  $('#crumb').textContent=v[0].toUpperCase()+v.slice(1);
+  $('#crumb').textContent=v==='fleet'?'Overview':v[0].toUpperCase()+v.slice(1);
   for(const k of ['graph','runs','sessions','memory','stats','fleet'])
     $('#view-'+k).style.display=v===k?'':'none';
+  // navigating dismisses a FLOATING detail drawer (node/history/diff, and the
+  // full-screen run detail on mobile); the docked Runs pane stays with its view
+  if($('#drawer').classList.contains('on')){ $('#drawer').classList.remove('on');
+    $('#scrim').classList.remove('on'); clearTimeout(window.__liveT); }
   // the graph selector scopes single-graph views — meaningless on the
   // cross-graph fleet, so it steps aside there
   const gp=$('#gpill'); if(gp) gp.style.display=v==='fleet'?'none':'';
@@ -931,8 +1195,51 @@ function switchView(v){ VIEW=v;
   // the canvas was often sized while hidden (fleet is the landing view) —
   // re-measure AND re-fit every time the graph tab is entered
   if(cy&&v==='graph')setTimeout(()=>{cy.resize();cy.fit(undefined,50);},60);
+  // live box-status poll only makes sense on the combined board
+  if(v==='graph'&&cy&&!singleCanvas()) startCombinedLive(); else stopCombinedLive();
 }
 $$('.nav button,.bottom-nav button').forEach(b=>b.onclick=()=>switchView(b.dataset.v));
+
+/* ---------- command palette (⌘K): jump to views, graphs, and runs ---------- */
+let PAL_ITEMS=[], PAL_SEL=0;
+function palOpen(){ return $('#pal').classList.contains('on'); }
+window.openPalette=()=>{ $('#pal-scrim').classList.add('on'); $('#pal').classList.add('on');
+  const inp=$('#pal-input'); inp.value=''; palRender(''); setTimeout(()=>inp.focus(),20); };
+window.closePalette=()=>{ $('#pal-scrim').classList.remove('on'); $('#pal').classList.remove('on'); };
+function _stCol(s){ return s==='error'?'var(--err)':s==='done'?'var(--ok)':'var(--warn)'; }
+async function palRender(q){
+  q=(q||'').trim(); const ql=q.toLowerCase(); const items=[];
+  [['fleet','Overview'],['graph','Graph'],['runs','Runs'],['sessions','Sessions'],['stats','Stats'],['memory','Memory']]
+    .filter(([k,l])=>!q||l.toLowerCase().includes(ql))
+    .forEach(([k,l])=>items.push({kind:'view',label:'Go to '+l,dot:'var(--accent)',sub:'',
+      act:()=>{ closePalette(); switchView(k); }}));
+  (window.__graphList||[]).filter(g=>q&&g.toLowerCase().includes(ql)).slice(0,6)
+    .forEach(g=>items.push({kind:'graph',label:g,dot:'var(--accent-text)',sub:'graph',
+      act:()=>{ closePalette(); selectGraph(g); switchView('graph'); }}));
+  if(q){ try{ const d=await(await fetch('/api/runs?limit=6&q='+encodeURIComponent(q))).json();
+    (d.runs||[]).forEach(r=>items.push({kind:'run',label:r.id.slice(0,10),dot:_stCol(r.status),
+      sub:(r.graph||'')+' · '+r.status,
+      act:()=>{ closePalette(); switchView('runs'); openRun(r.id); }})); }catch(e){} }
+  PAL_ITEMS=items; PAL_SEL=0; palPaint();
+}
+function palPaint(){ const list=$('#pal-list');
+  if(!PAL_ITEMS.length){ list.innerHTML='<div class="pal-empty">No matches</div>'; return; }
+  list.innerHTML=PAL_ITEMS.map((it,i)=>`<div class="pal-item ${i===PAL_SEL?'sel':''}" data-i="${i}">
+    <span class="pal-kind">${it.kind}</span><span class="pal-dot" style="background:${it.dot}"></span>
+    <span class="pal-label">${esc(it.label)}</span>${it.sub?`<span class="pal-sub">${esc(it.sub)}</span>`:''}</div>`).join('');
+  [...list.querySelectorAll('.pal-item')].forEach(el=>el.onclick=()=>PAL_ITEMS[+el.dataset.i]?.act());
+}
+(function(){ const inp=$('#pal-input'); let t;
+  if(inp) inp.oninput=e=>{ clearTimeout(t); t=setTimeout(()=>palRender(e.target.value),160); };
+  document.addEventListener('keydown',e=>{
+    if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==='k'){ e.preventDefault(); palOpen()?closePalette():openPalette(); return; }
+    if(!palOpen()) return;
+    if(e.key==='Escape'){ e.preventDefault(); closePalette(); }
+    else if(e.key==='ArrowDown'){ e.preventDefault(); PAL_SEL=Math.min(PAL_SEL+1,PAL_ITEMS.length-1); palPaint(); }
+    else if(e.key==='ArrowUp'){ e.preventDefault(); PAL_SEL=Math.max(PAL_SEL-1,0); palPaint(); }
+    else if(e.key==='Enter'){ e.preventDefault(); PAL_ITEMS[PAL_SEL]?.act(); }
+  });
+})();
 
 /* returning to the foreground (PWA resume): refetch the current view and,
    if the drawer is showing a still-active run, refresh it too */
@@ -977,8 +1284,12 @@ $('#newrun').onclick=async()=>{ let tpl={},ctx={},cs={}; try{const sd=await(awai
     cw.style.display=has?'':'none';
     if(has) document.getElementById('ctx-json').value=JSON.stringify(ctx,null,2); }
   const pc=document.getElementById('pause-chips');
-  if(pc&&cy) pc.innerHTML=cy.nodes().filter(n=>!n.data('terminal')).map(n=>
-    `<span class="tagchip pause-chip" data-n="${esc(n.id())}" onclick="this.classList.toggle('on')">${esc(n.id())}</span>`).join('');
+  if(pc&&cy){ const g=gconc();  // combined canvas: chips come from the concrete graph the form targets
+    const nodes=singleCanvas()?cy.nodes().filter(n=>!n.data('terminal'))
+      :cy.nodes('.gnode').filter(n=>n.data('graph')===g&&!n.data('terminal'));
+    const nm=n=>n.data('nname')||n.id();
+    pc.innerHTML=nodes.map(n=>
+      `<span class="tagchip pause-chip" data-n="${esc(nm(n))}" onclick="this.classList.toggle('on')">${esc(nm(n))}</span>`).join(''); }
   $('#scrim').classList.add('on'); $('#modal').classList.add('on'); };
 $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json').value||'{}');}catch(e){return toast('Invalid JSON input');}
   const sess=$('#run-session').value.trim();
@@ -990,7 +1301,9 @@ $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json')
   const cw=document.getElementById('ctx-wrap');
   if(cw&&cw.style.display!=='none'){ try{ const c=JSON.parse(document.getElementById('ctx-json').value||'{}');
     if(Object.keys(c).length) input._configurable=c; }catch(e){ return toast('Invalid context JSON'); } }
-  closeAll(); switchView('graph'); await runNow(input); };
+  closeAll(); switchView('graph');
+  if(!singleCanvas()) await focusGraph(gconc());   // animation targets bare node ids — need the single-graph canvas
+  await runNow(input); };
 
 async function runNow(input){
   const b=$('#newrun'); b.disabled=true;
@@ -1032,10 +1345,10 @@ async function loadRuns(){
     $('#pager').innerHTML=''; return; }
   $('#runs-wrap').innerHTML=`<div style="overflow:auto"><table>
     <thead><tr><th></th><th>Status</th><th>Run</th><th>Source</th><th class="r">Nodes</th><th class="r">LLM</th><th class="r">Tokens</th><th class="r">Cost</th><th>Scores</th><th class="r">Duration</th><th class="r">Age</th></tr></thead>
-    <tbody>${runs.map(r=>`<tr onclick="openRun('${r.id}')">
+    <tbody>${runs.map(r=>`<tr id="rrow-${r.id}" class="${window.__runSel===r.id?'rsel':''}" onclick="openRun('${r.id}')">
       <td onclick="event.stopPropagation();toggleBook('${r.id}',${r.bookmarked?0:1})"><span class="star ${r.bookmarked?'on':''}">${r.bookmarked?'★':'☆'}</span></td>
       <td><span class="status ${r.status}"><span class="d"></span>${r.status}</span></td>
-      <td><div style="font-weight:600">${esc(r.graph||'run')}</div><div class="mono">${r.id.slice(0,10)}</div>
+      <td><div style="font-weight:600">${gnameHtml(r.graph)}</div><div class="mono">${r.id.slice(0,10)}</div>
         ${r.status==='error'&&r.error?`<div class="errhint" title="open for traceback + source">${esc(String(r.error).trim().split('\n').filter(Boolean).pop().slice(0,90))}</div>`:''}
         ${(r.tags||[]).map(t=>`<span class="tagchip" onclick="event.stopPropagation();setTag(decodeURIComponent('${encodeURIComponent(t)}'))">${esc(t)}</span>`).join('')}</td>
       <td><span class="src">${r.source}</span>${r.session?`<div class="mono" style="font-size:10.5px;color:var(--muted);cursor:pointer" onclick="event.stopPropagation();RF.session=decodeURIComponent('${encodeURIComponent(r.session)}');RF.offset=0;loadRuns()">${esc(r.session)}</div>`:''}</td>
@@ -1064,13 +1377,14 @@ $('#rbook').onclick=()=>{RF.bookmarked=!RF.bookmarked;$('#rbook').classList.togg
 
 /* ---------- sessions ---------- */
 async function loadSessions(){
-  const all=gAll();
-  const ss=await(await fetch('/api/sessions?'+(all?'':gscope()))).json();
-  $('#sess-sub').textContent=(ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'')+(all?' · all graphs':'');
+  const all=gAll()||gGroupSel();   // subject scope spans graphs too — show the Graphs column
+  const ss=await(await fetch('/api/sessions?'+(gAll()?'':gscope()))).json();
+  $('#sess-sub').textContent=(ss.length?`${ss.length} session${ss.length===1?'':'s'}`:'')+
+    (gAll()?' · all graphs':(gGroupSel()?' · '+GSEL:''));
   if(!ss.length){ $('#sess-wrap').innerHTML='<div class="empty"><div class="t">No sessions yet</div>Pass <span class="mono">session=</span> to <span class="mono">WindhoverTracer</span>, or <span class="mono">config={"metadata": {"windhover_session": …}}</span> in any LangChain/LangGraph app.</div>'; return; }
   $('#sess-wrap').innerHTML=`<div style="overflow:auto"><table>
     <thead><tr><th>Session</th>${all?'<th>Graphs</th>':''}<th class="r">Runs</th><th class="r">Errors</th><th class="r">Tokens</th><th class="r">Cost</th><th class="r">Total time</th><th class="r">Last active</th></tr></thead>
-    <tbody>${ss.map(s=>`<tr onclick="RF.session=decodeURIComponent('${encodeURIComponent(s.session)}');RF.offset=0;${all?"RF.graph='';const rg=document.getElementById('rgraph');if(rg)rg.value='';":''}switchView('runs')">
+    <tbody>${ss.map(s=>`<tr onclick="RF.session=decodeURIComponent('${encodeURIComponent(s.session)}');RF.offset=0;${gAll()?"RF.graph='';const rg=document.getElementById('rgraph');if(rg)rg.value='';":''}switchView('runs')">
       <td style="font-weight:600" class="mono">${esc(s.session)}</td>
       ${all?`<td>${(s.graphs||[]).map(g=>`<span class="tagchip" style="cursor:default">${esc(g)}</span>`).join(' ')}</td>`:''}
       <td class="r num">${s.runs}</td>
@@ -1154,10 +1468,12 @@ async function openRun(id){
   const gsel=document.getElementById('hitl-goto');
   if(gsel&&cy) gsel.innerHTML='<option value="">goto node (optional)…</option>'+
     cy.nodes().filter(n=>!n.data('terminal')).map(n=>`<option>${esc(n.id())}</option>`).join('');
-  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+  window.__runSel=id;
+  if(window.innerWidth>840 && VIEW!=='runs') switchView('runs');  // detail docks into the Runs pane
+  openDrawer('runs'); _markRunRow(id);
   clearTimeout(window.__liveT);
   if(r.status==='running')
-    window.__liveT=setTimeout(()=>{ if($('#drawer').classList.contains('on')&&window.__run&&window.__run.id===id) openRun(id); },1500);
+    window.__liveT=setTimeout(()=>{ if(drawerShowing()&&window.__run&&window.__run.id===id) openRun(id); },1500);
 }
 window.addScore=async(id)=>{
   const name=$('#sc-name').value.trim(), value=parseFloat($('#sc-val').value);
@@ -1221,6 +1537,7 @@ function kv(k,v){
 window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
   el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
 window.replay=async(steps)=>{ closeAll(); switchView('graph');
+  if(!singleCanvas()) await focusGraph((window.__run||{}).graph||gconc());  // bare node ids need the single canvas
   cy.nodes().removeClass('running done err'); cy.edges().removeClass('flow'); let prev='__start__';
   for(const raw of steps){ const st=typeof raw==='string'?{n:raw,e:false}:raw;
     cy.$id(prev).addClass('done').removeClass('running');
@@ -1320,7 +1637,7 @@ window.showHistory=async(tid)=>{
         </div>
       </div></div>`;
   }).join('')||'<div class="empty">No checkpoints recorded for this thread</div>';
-  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+  openDrawer('float');
 };
 
 /* ---------- run diff ---------- */
@@ -1360,7 +1677,7 @@ window.pickDiff=async(id)=>{
         </div>
       </div></div>`;
   }).join('');
-  $('#scrim').classList.add('on'); $('#drawer').classList.add('on');
+  openDrawer('float');
 };
 
 /* ---------- stats ---------- */
@@ -1374,14 +1691,14 @@ function chartCard(title,daily,val,errKey){
     <div class="clabels"><span>${daily[0]?.day||''}</span><span>${daily[daily.length-1]?.day||''}</span></div></div></div>`;
 }
 async function loadStats(){
-  const all=gAll();
-  const s=await(await fetch('/api/stats?days=30&'+(all?'':gscope()))).json(); const t=s.totals||{};
+  const all=gAll()||gGroupSel();   // subject scope also groups per-node rows per graph
+  const s=await(await fetch('/api/stats?days=30&'+(gAll()?'':gscope()))).json(); const t=s.totals||{};
   const errRate=t.runs?Math.round((t.errors||0)/t.runs*100):0;
   const max=Math.max(1,...(s.per_node||[]).map(n=>n.avg_ms||0));
   const daily=s.daily||[], models=s.models||[];
   const db=t.db_bytes!=null?(t.db_bytes/1048576).toFixed(1)+' MB db':'';
   const ssub=document.getElementById('stats-sub');
-  if(ssub) ssub.textContent=all?'all graphs':((multiGraph()&&GSEL)?('graph: '+GSEL):'all recorded runs');
+  if(ssub) ssub.textContent=gAll()?'all graphs':(gGroupSel()?('subject: '+GSEL):((multiGraph()&&GSEL)?('graph: '+GSEL):'all recorded runs'));
   $('#stats-body').innerHTML=`
     <div class="metrics">
       <div class="metric"><div class="v num">${t.runs||0}</div><div class="l">Total runs</div></div>
@@ -1414,7 +1731,31 @@ async function loadStats(){
 }
 
 /* ---------- misc ---------- */
-function closeAll(){ clearTimeout(window.__liveT); $('#scrim').classList.remove('on'); $('#drawer').classList.remove('on'); $('#modal').classList.remove('on'); }
+/* the run/detail drawer lives in two modes: docked as the Runs master-detail
+   right pane, or a floating slide-over for node/history/diff (and on mobile) */
+function openDrawer(mode){
+  const dr=$('#drawer'), slot=$('#runs-detail-slot');
+  if(mode==='runs' && window.innerWidth>840){
+    if(slot && dr.parentNode!==slot) slot.appendChild(dr);
+    dr.classList.add('docked'); dr.classList.remove('on');
+    if(slot) slot.style.display='';
+    $('#scrim').classList.remove('on');
+  }else{
+    if(dr.classList.contains('docked')){ dr.classList.remove('docked');
+      if(dr.parentNode!==document.body) document.body.appendChild(dr); }
+    if(slot) slot.style.display='none';
+    $('#scrim').classList.add('on'); dr.classList.add('on');
+  }
+}
+function drawerShowing(){ const dr=$('#drawer');
+  return dr.classList.contains('on') ||
+    (dr.classList.contains('docked') && $('#runs-detail-slot')?.style.display!=='none'); }
+function _markRunRow(id){ $$('#runs-wrap tr.rsel').forEach(t=>t.classList.remove('rsel'));
+  const el=document.getElementById('rrow-'+id); if(el) el.classList.add('rsel'); }
+function closeAll(){ clearTimeout(window.__liveT);
+  $('#scrim').classList.remove('on'); $('#drawer').classList.remove('on'); $('#modal').classList.remove('on');
+  const slot=$('#runs-detail-slot'); if(slot) slot.style.display='none';
+  window.__runSel=null; $$('#runs-wrap tr.rsel').forEach(t=>t.classList.remove('rsel')); }
 function esc(s){ return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
 function fmtms(ms){ return ms<1000?ms+' ms':(ms/1000).toFixed(1)+' s'; }
 function fmtk(n){ return n<1000?String(n):(n/1000).toFixed(1)+'k'; }
@@ -1547,10 +1888,11 @@ window.previewArt=async(runId,encPath,kind,ext,name)=>{
 function _fleetSelect(graph){
   if(graph&&(window.__graphList||[]).includes(graph)&&GSEL!==graph){
     GSEL=graph; localStorage.setItem('wh-graph',GSEL);
+    localStorage.setItem('wh-graph-last',GLAST=GSEL);
     // rebuild options rather than set .value — iOS Safari can leave the
     // collapsed select showing the old label otherwise
     const sel=$('#gsel');
-    if(sel) sel.innerHTML=window.__graphList.map(g=>`<option ${g===GSEL?'selected':''}>${esc(g)}</option>`).join('');
+    if(sel) sel.innerHTML=gOptions(GSEL);
     RF.graph=GSEL; const rg=$('#rgraph'); if(rg) rg.value=GSEL;
     loadGraph(true); probeMemory();
   }
@@ -1596,28 +1938,10 @@ function _fRun(r){
     <span class="fmeta">${r.node_count||0} nodes${r.total_tokens?` · ${fmtk(r.total_tokens)} tok`:''}${r.duration_ms?` · ${fmtms(r.duration_ms)}`:''}</span>
     <span class="fago">${ago(r.started_ms)}</span></div>`;
 }
-async function loadFleet(quiet){
-  let d; try{ d=await(await fetch('/api/overview')).json(); }catch(e){
-    if(!quiet) $('#fleet-body').innerHTML='<div class="empty"><div class="t">Overview unavailable</div>Check the collector.</div>';
-    return; }
-  const att=d.attention||[], graphs=(d.graphs||[]).filter(g=>g.name);
-  let html='';
-  if(att.length){
-    html+=`<div class="page-head" style="margin-top:2px"><h2 class="fh">Needs attention</h2><span class="sub">${att.length} run${att.length===1?'':'s'} awaiting</span></div>`;
-    html+=att.map(a=>`<div class="fatt ${a.status}" onclick="fleetOpen('${esc(a.graph||'')}','${a.id}')">
-      <span class="status ${a.status}"><span class="d"></span>${a.status}</span>
-      <span class="mono fgraph">${esc(a.graph||'—')}</span>
-      <span class="mono fid">${a.id.slice(0,8)}</span>
-      ${a.interrupt_summary?`<span class="fq">${esc(a.interrupt_summary)}</span>`:''}
-      <span class="fago">${a.status==='interrupted'?'waiting ':''}${ago(a.started_ms)}</span>
-      ${a.status==='interrupted'&&a.thread_id?`<span class="fresume" onclick="event.stopPropagation()">
-        <input id="fr-${a.id}" placeholder="resume value (blank = continue)">
-        <button class="btn primary" onclick="fleetResume('${esc(a.graph||'')}','${esc(a.thread_id)}','${a.id}')">Resume</button></span>`:''}</div>`).join('');
-  }
-  html+=`<div class="fgrid">`+graphs.map(g=>`
-    <div class="card fcard">
+function _fCard(g){
+  return `<div class="card fcard">
       <div class="fcard-head" onclick="fleetGraph('${esc(g.name)}')">
-        <span class="fname mono">${esc(g.name)}</span>
+        <span class="fname mono">${gnameHtml(g.name)}</span>
         ${g.serving?'':'<span class="tagchip">not serving</span>'}
         ${g.interrupted_now?`<span class="fbadge">⏸ ${g.interrupted_now} awaiting approval</span>`:''}
         ${g.running_now?`<span class="fbadge run">● ${g.running_now} running</span>`:''}
@@ -1629,7 +1953,86 @@ async function loadFleet(quiet){
         ${g.daily?`<span class="fsparkwrap" title="runs per day, errors in red">${_spark(g.daily)}</span>`:''}
       </div>
       ${(g.recent||[]).map(_fRun).join('')||'<div class="empty" style="padding:14px">No runs recorded.</div>'}
-    </div>`).join('')+`</div>`;
+    </div>`;
+}
+/* subject groups: nested collapsible sections with rolled-up stats */
+function _fgClosed(){ return window.__fgClosed=window.__fgClosed||
+  new Set(JSON.parse(localStorage.getItem('wh-fgroups')||'[]')); }
+window.fgToggle=(pfx)=>{
+  const c=_fgClosed(); c.has(pfx)?c.delete(pfx):c.add(pfx);
+  localStorage.setItem('wh-fgroups',JSON.stringify([...c]));
+  loadFleet(true);
+};
+window.fgRuns=(pfx)=>{ // scope the whole app to this subject and jump to Runs
+  GSEL=pfx+'/*'; localStorage.setItem('wh-graph',GSEL);
+  const sel=$('#gsel'); if(sel) sel.innerHTML=gOptions(GSEL);
+  RF.graph=GSEL; RF.offset=0; const rg=$('#rgraph'); if(rg){ rg.innerHTML=gOptions(GSEL); rg.value=GSEL; }
+  switchView('runs');
+};
+function _fLeafStats(node,byName,out){ out=out||[];
+  node.leaves.forEach(n=>{ if(byName[n]) out.push(byName[n]); });
+  for(const k in node.groups) _fLeafStats(node.groups[k],byName,out);
+  return out;
+}
+function _fGroupHtml(node,prefix,byName){
+  let html='';
+  for(const key of Object.keys(node.groups).sort()){
+    const kid=node.groups[key], pfx=prefix?prefix+'/'+key:key;
+    const gs=_fLeafStats(kid,byName);
+    const agg=gs.reduce((a,g)=>({runs:a.runs+(g.runs_7d||0),errs:a.errs+(g.errors_7d||0),
+      int:a.int+(g.interrupted_now||0),run:a.run+(g.running_now||0)}),{runs:0,errs:0,int:0,run:0});
+    const closed=_fgClosed().has(pfx);
+    html+=`<div class="fgroup">
+      <div class="fgroup-head" onclick="fgToggle('${esc(pfx)}')">
+        <span class="caret ${closed?'':'open'}">▶</span>
+        <span class="fgname">${esc(pfx)}/</span>
+        <span class="fgsub">${gs.length} graph${gs.length===1?'':'s'} · ${agg.runs} run${agg.runs===1?'':'s'} 7d${agg.errs?` · <span style="color:var(--err)">${agg.errs} error${agg.errs===1?'':'s'}</span>`:''}</span>
+        ${agg.int?`<span class="fbadge">⏸ ${agg.int}</span>`:''}
+        ${agg.run?`<span class="fbadge run">● ${agg.run}</span>`:''}
+        <span class="spacer"></span>
+        <button class="copy" onclick="event.stopPropagation();fgRuns('${esc(pfx)}')">runs →</button>
+      </div>
+      ${closed?'':`<div class="fgroup-body">
+        ${_fGroupHtml(kid,pfx,byName)}
+        ${kid.leaves.length?`<div class="fgrid">${kid.leaves.slice().sort().map(n=>_fCard(byName[n])).join('')}</div>`:''}
+      </div>`}</div>`;
+  }
+  return html;
+}
+async function loadFleet(quiet){
+  let d; try{ d=await(await fetch('/api/overview')).json(); }catch(e){
+    if(!quiet) $('#fleet-body').innerHTML='<div class="empty"><div class="t">Overview unavailable</div>Check the collector.</div>';
+    return; }
+  let day=null; try{ day=await(await fetch('/api/stats?days=1')).json(); }catch(e){}
+  const att=d.attention||[], graphs=(d.graphs||[]).filter(g=>g.name);
+  let html='';
+  if(day&&day.totals){ const t=day.totals, er=t.runs?Math.round((t.errors||0)/t.runs*100):0;
+    const kpi=(label,val,sub,subCol)=>`<div class="kpi"><div class="kl">${label}</div>`+
+      `<div class="kv num">${val}</div><div class="ks"${subCol?` style="color:${subCol}"`:''}>${sub||'&nbsp;'}</div></div>`;
+    html+=`<div class="kpirow">
+      ${kpi('Runs · 24h', t.runs||0, (t.llm_calls||0)+' LLM calls')}
+      ${kpi('Error rate', er+'%', (t.errors||0)+' error'+((t.errors||0)===1?'':'s'), er?'var(--err)':'var(--muted)')}
+      ${kpi('Avg latency', t.avg_ms!=null?fmtms(Math.round(t.avg_ms)):'—', 'per run')}
+      ${kpi('Cost · 24h', t.cost!=null?'$'+(t.cost||0).toFixed(4):'—', fmtk(t.tokens||0)+' tokens')}
+    </div>`;
+  }
+  if(att.length){
+    html+=`<div class="page-head" style="margin-top:2px"><h2 class="fh">Needs attention</h2><span class="sub">${att.length} run${att.length===1?'':'s'} awaiting</span></div>`;
+    html+=att.map(a=>`<div class="fatt ${a.status}" onclick="fleetOpen('${esc(a.graph||'')}','${a.id}')">
+      <span class="status ${a.status}"><span class="d"></span>${a.status}</span>
+      <span class="mono fgraph">${a.graph?gnameHtml(a.graph):'—'}</span>
+      <span class="mono fid">${a.id.slice(0,8)}</span>
+      ${a.interrupt_summary?`<span class="fq">${esc(a.interrupt_summary)}</span>`:''}
+      <span class="fago">${a.status==='interrupted'?'waiting ':''}${ago(a.started_ms)}</span>
+      ${a.status==='interrupted'&&a.thread_id?`<span class="fresume" onclick="event.stopPropagation()">
+        <input id="fr-${a.id}" placeholder="resume value (blank = continue)">
+        <button class="btn primary" onclick="fleetResume('${esc(a.graph||'')}','${esc(a.thread_id)}','${a.id}')">Resume</button></span>`:''}</div>`).join('');
+  }
+  const byName=Object.fromEntries(graphs.map(g=>[g.name,g]));
+  const tree=gtree(graphs.map(g=>g.name));
+  html+=_fGroupHtml(tree,'',byName);
+  if(tree.leaves.length)   // ungrouped graphs stay at the root, below the subjects
+    html+=`<div class="fgrid">${tree.leaves.slice().sort().map(n=>_fCard(byName[n])).join('')}</div>`;
   $('#fleet-body').innerHTML=html||'<div class="empty"><div class="t">No graphs yet</div>Serve a graph or trace runs in.</div>';
 }
 let tT; function toast(m){ const t=$('#toast'); t.textContent=m; t.classList.add('show'); clearTimeout(tT); tT=setTimeout(()=>t.classList.remove('show'),2600); }

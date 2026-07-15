@@ -620,6 +620,51 @@ def test_graph_scoped_stats_and_sessions():
     print("graph-scoped stats/sessions OK")
 
 
+def test_graph_group_prefix_scope():
+    """Path-style graph names form a subject tree; a "prefix/*" filter scopes
+    runs/sessions/stats to that subtree at any depth — and never to lookalike
+    names (opsy must not match ops/*)."""
+    p = tempfile.mktemp(suffix=".db")
+    s = Store(p)
+    now = int(time.time() * 1000)
+    graphs = ["ops/etl/nightly", "ops/etl/backfill", "ops/monitor/heartbeat",
+              "support/triage", "chat", "opsy"]
+    for i, g in enumerate(graphs):
+        rid = f"p{i}"
+        s.open_run({"id": rid, "graph": g, "session": f"s-{g}", "started_ms": now - i})
+        s.add_span({"id": f"sp{i}", "run_id": rid, "type": "node", "name": "step",
+                    "seq": 0, "dur_ms": 10})
+        s.close_run(rid, "done", now + 1)
+    assert s.runs(graph="ops/*")["total"] == 3
+    assert s.runs(graph="ops/etl/*")["total"] == 2
+    assert s.runs(graph="ops/etl/nightly")["total"] == 1
+    assert s.runs(graph="opsy")["total"] == 1          # exact match untouched
+    assert {x["session"] for x in s.sessions(graph="ops/*")} == \
+        {"s-ops/etl/nightly", "s-ops/etl/backfill", "s-ops/monitor/heartbeat"}
+    st = s.stats(graph="ops/etl/*")
+    assert st["totals"]["runs"] == 2
+    # subject scope groups per-node rows per graph (same-named nodes never merge)
+    assert {r["graph"] for r in st["per_node"]} == {"ops/etl/nightly", "ops/etl/backfill"}
+    assert all(r["n"] == 1 for r in st["per_node"])
+    assert any(d["runs"] == 2 for d in st["daily"])
+    # exact single-graph stats keep the flat per-node shape
+    st1 = s.stats(graph="ops/etl/nightly")
+    assert st1["per_node"] and "graph" not in st1["per_node"][0]
+    print("graph group prefix scope OK")
+
+
+def test_env_graph_names_with_slashes():
+    from windhover.config import Config
+    os.environ["WINDHOVER_GRAPH"] = "ops/etl/nightly=m1:g1,support/triage=m2:g2"
+    try:
+        cfg = Config.from_env()
+        assert cfg.graphs == (("ops/etl/nightly", "m1:g1"),
+                              ("support/triage", "m2:g2")), cfg.graphs
+    finally:
+        os.environ.pop("WINDHOVER_GRAPH", None)
+    print("env graph names with slashes OK")
+
+
 def test_nonblocking_sink_and_webhook_hook():
     # sink to an unreachable host must return instantly and never raise
     from windhover.tracer import http_sink
@@ -743,7 +788,7 @@ def test_overview_fleet():
     s.open_run({"id": "a-wait", "graph": "alpha", "thread_id": "t1",
                 "started_ms": now - 500})
     s.add_span({"id": "iv1", "run_id": "a-wait", "type": "interrupt", "name": "interrupt",
-                "seq": 0, "output": {"question": "Approve ATP reports?"}})
+                "seq": 0, "output": {"question": "Approve refund #841?"}})
     s.close_run("a-wait", "interrupted", now - 400)
     # beta: 1 error, 1 running
     s.open_run({"id": "b0", "graph": "beta", "started_ms": now - 3000})
@@ -782,7 +827,7 @@ def test_overview_fleet():
     att = ov["attention"]
     assert [a["id"] for a in att] == ["b-run", "a-wait"]
     aw = att[1]
-    assert aw["status"] == "interrupted" and "Approve ATP reports?" in aw["interrupt_summary"]
+    assert aw["status"] == "interrupted" and "Approve refund #841?" in aw["interrupt_summary"]
     assert aw["waiting_ms"] >= 0 and aw["thread_id"] == "t1"
     # per-graph rollups + recent capped at 3, newest first, last_run = newest
     assert by["alpha"]["interrupted_now"] == 1 and by["beta"]["running_now"] == 1
@@ -812,9 +857,9 @@ def test_awaiting_count_and_webhook_parse_and_digest():
     d, m = Config._parse_webhooks("https://hooks.example/a?x=1")
     assert d == "https://hooks.example/a?x=1" and m == {}
     d, m = Config._parse_webhooks(
-        "https://hooks.example/default, atp=https://hooks.example/atp?k=v ,other=https://h.example/o")
+        "https://hooks.example/default, billing=https://hooks.example/billing?k=v ,other=https://h.example/o")
     assert d == "https://hooks.example/default"
-    assert m == {"atp": "https://hooks.example/atp?k=v", "other": "https://h.example/o"}
+    assert m == {"billing": "https://hooks.example/billing?k=v", "other": "https://h.example/o"}
     d, m = Config._parse_webhooks("")
     assert d == "" and m == {}
 
