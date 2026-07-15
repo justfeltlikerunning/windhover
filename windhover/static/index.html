@@ -110,6 +110,30 @@ main{flex:1;display:flex;flex-direction:column;min-width:0}
 .lg{display:flex;align-items:center;gap:6px}
 .sw{width:9px;height:9px;border-radius:3px;border:1.5px solid var(--border2)}
 .sw.run{border-color:var(--warn);background:var(--warn-weak)} .sw.done{border-color:var(--ok);background:var(--ok-weak)} .sw.err{border-color:var(--err);background:var(--err-weak)}
+.sw.wait{border-color:var(--warn);background:var(--warn-weak);border-style:dashed}
+/* replay scrubber + live-run banner on the canvas */
+#replaybar{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 56px);
+  display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--border2);
+  border-radius:10px;padding:8px 12px;box-shadow:0 6px 24px rgba(0,0,0,.18);z-index:30}
+#replaybar input[type=range]{width:min(340px,38vw);accent-color:var(--accent)}
+#rp-time{font-size:11px;color:var(--text2);min-width:96px;text-align:center}
+#rp-speed{background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:6px;font-size:11px;padding:3px 4px}
+#livebanner{position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:29;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:82%}
+.lb-chip{display:flex;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--warn);border-radius:999px;
+  padding:5px 12px;font-size:12px;color:var(--text);cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,.15)}
+.lb-chip.run{border-color:var(--accent)}
+.lb-chip .d{width:8px;height:8px;border-radius:50%;background:var(--warn);animation:pulse 1.2s infinite}
+.lb-chip.run .d{background:var(--accent)}
+/* parallel-branch grouping in the trace timeline */
+.badge-par{font-size:9.5px;padding:1px 5px;border-radius:6px;margin-left:6px;white-space:nowrap;
+  color:var(--accent);border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 12%,transparent)}
+.tr-row.pgrp .tr-gantt{border-radius:4px;background:color-mix(in srgb,var(--accent) 6%,transparent);
+  box-shadow:inset 2px 0 0 color-mix(in srgb,var(--accent) 45%,transparent)}
+@media (max-width:600px){
+  #replaybar{left:10px;right:10px;transform:none;justify-content:space-between;padding:7px 8px;gap:6px}
+  #replaybar input[type=range]{width:auto;flex:1;min-width:56px}
+  #rp-time{min-width:0;font-size:10px}
+}
 
 /* ---------- table ---------- */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);box-shadow:var(--shadow);overflow:hidden}
@@ -520,12 +544,26 @@ a.copy{text-decoration:none}
           <button class="btn ghost" id="lsave" style="display:none" title="Save this arrangement" onclick="saveLayout()">⭳ Save</button>
           <button class="btn ghost" id="lreset" style="display:none" title="Reset to auto-layout" onclick="resetLayout()">⟲ Reset</button>
           <button class="btn ghost" id="xray" style="display:none" onclick="toggleXray()">◉ X-ray</button>
+          <button class="btn ghost" id="heatbtn" style="display:none" onclick="toggleHeat()" title="Color nodes by time spent (latest run)">▦ Heat</button>
         </div>
         <div class="legend">
           <span class="lg"><span class="sw"></span> idle</span>
           <span class="lg"><span class="sw run"></span> running</span>
+          <span class="lg"><span class="sw wait"></span> awaiting</span>
           <span class="lg"><span class="sw done"></span> done</span>
           <span class="lg"><span class="sw err"></span> error</span>
+        </div>
+        <div id="livebanner" style="display:none"></div>
+        <div id="replaybar" style="display:none">
+          <button class="btn ghost" id="rp-play" onclick="replayToggle()">▶</button>
+          <input type="range" id="rp-scrub" min="0" max="1000" value="0" oninput="rpScrub(this.value)">
+          <span class="mono" id="rp-time">0.00s</span>
+          <select id="rp-speed" onchange="rpSpeed(this.value)" title="Playback speed">
+            <option value="fit" selected>fit 8s</option>
+            <option value="1">1×</option><option value="2">2×</option>
+            <option value="5">5×</option><option value="10">10×</option>
+          </select>
+          <button class="btn ghost" onclick="replayClose()" title="Close replay">×</button>
         </div>
       </div>
       <div id="view-runs" style="display:none">
@@ -701,6 +739,17 @@ function cyStyle(){ return [
    'font-family':'ui-monospace, Menlo, Consolas, monospace','color':cssv('--text2'),
    'text-background-color':cssv('--bg'),'text-background-opacity':.9,'text-background-padding':2}},
  {selector:'edge.flow',style:{'line-color':cssv('--accent'),'target-arrow-color':cssv('--accent'),'width':2.4}},
+ /* single-canvas live state: a run paused at a human gate + pulse for active nodes */
+ {selector:'node.wait',style:{'border-color':cssv('--warn'),'border-width':3,'border-style':'dashed','background-color':cssv('--warn-weak')}},
+ {selector:'node.running.pon, node.wait.pon',style:{'border-width':4.5}},
+ /* duration heatmap — border ramp (cool → hot) + per-node time label */
+ {selector:'node.rlbl, node.heat',style:{'label':'data(hlabel)','text-wrap':'wrap','text-max-width':180}},
+ {selector:'node.heat',style:{'border-width':3}},
+ {selector:'node.heat0',style:{'border-color':'#3a8f86'}},
+ {selector:'node.heat1',style:{'border-color':'#7fa25a'}},
+ {selector:'node.heat2',style:{'border-color':'#c9a13b'}},
+ {selector:'node.heat3',style:{'border-color':'#d97e2e'}},
+ {selector:'node.heat4',style:{'border-color':'#d94f35'}},
  /* all-graphs canvas: each graph is a labelled compound box (watermark title) */
  {selector:'node.grp',style:{'shape':'round-rectangle','label':'data(label)','padding':24,/*=GRP_PAD*/
    'text-valign':'top','text-halign':'center','text-margin-y':2,'text-wrap':'none',
@@ -851,9 +900,11 @@ async function loadGraph(force){
   if(an){ const scoped=gGroupSel(); an.style.display=scoped?'':'none';
     if(scoped) an.textContent='scope '+GSEL; }
   const xb=$('#xray'); if(xb) xb.style.display=t.xray?'':'none';
+  const hb=$('#heatbtn'); if(hb){ hb.style.display=''; hb.textContent='▦ Heat'; } HEAT=false;
   const ca=$('#collapseall'); if(ca) ca.style.display='none';
   _layoutBtns(false);   // save/undo/redo/reset are for the multi-graph board only
-  stopCombinedLive();   // single-graph canvas has its own run animation
+  stopCombinedLive();   // single-graph canvas animates per-node instead (live ticker below)
+  replayClose(true);
   if(!t.nodes.length){ $('#view-graph').innerHTML='<div class="empty" style="padding-top:120px"><div class="t">No local graph configured</div>Set <span class="mono">WINDHOVER_GRAPH</span>, or trace runs in from your app and open Runs.</div>'; return; }
   const topo=(XRAY&&t.xray)?t.xray:t;
   window.__nodes=Object.fromEntries(topo.nodes.map(n=>[n.id,n]));
@@ -865,6 +916,67 @@ async function loadGraph(force){
   cy.on('tap','node',ev=>{ const n=ev.target; if(!n.data('terminal')) openNode(n.id()); });
   cy.on('mouseover','node',ev=>{ if(!ev.target.data('terminal')) $('#cy').style.cursor='pointer'; });
   cy.on('mouseout','node',()=>{ $('#cy').style.cursor=''; });
+  startSingleLive();    // reflect ANY active run (scheduled, external, or UI-fired) on the canvas
+}
+
+/* ---------- single-canvas live status — running / awaiting-approval, any run source ---------- */
+let __liveT3=null,__liveN3=0,__liveSig='',__pon3=false;
+function stopSingleLive(){ if(__liveT3){ clearInterval(__liveT3); __liveT3=null; } __liveSig='';
+  const lb=$('#livebanner'); if(lb) lb.style.display='none'; }
+function startSingleLive(){ stopSingleLive();
+  __liveT3=setInterval(()=>{
+    if(!cy||!singleCanvas()||VIEW!=='graph'||window.__streaming||replayOpen()) return;
+    __pon3=!__pon3; cy.nodes('.running,.wait').forEach(n=>n.toggleClass('pon',__pon3));
+    if(++__liveN3%3===0) singleLiveTick();               // refetch ~every 2.1s
+  },700);
+  singleLiveTick();
+}
+async function singleLiveTick(){
+  if(!cy||!singleCanvas()||VIEW!=='graph'||window.__streaming||replayOpen()) return;
+  const g=gconc(); if(!g) return;
+  let d; try{ d=await(await fetch('/api/runs?graph='+encodeURIComponent(g)+'&limit=8')).json(); }catch(e){ return; }
+  const act=(d.runs||[]).filter(r=>r.status==='running'||r.status==='interrupted');
+  const sig=act.map(r=>r.id+':'+r.status+':'+(r.node_count||0)).join(',');
+  if(sig===__liveSig) return;
+  const hadLive=!!__liveSig; __liveSig=sig;
+  const lb=$('#livebanner');
+  if(!act.length){ if(lb) lb.style.display='none';
+    if(hadLive){ cy.nodes().removeClass('running wait pon'); singleLiveDone(); } return; }
+  if(lb){ lb.style.display='flex';
+    lb.innerHTML=act.slice(0,3).map(r=>`<span class="lb-chip ${r.status==='running'?'run':''}" onclick="openRun('${r.id}')">
+      <span class="d"></span>${r.status==='running'?'running':'⏸ awaiting approval'} · <span class="mono">${r.id.slice(0,8)}</span> · open</span>`).join(''); }
+  let det; try{ det=await(await fetch('/api/runs/'+act[0].id)).json(); }catch(e){ return; }
+  paintRunState(det);
+}
+async function singleLiveDone(){ // last active run just finished — show its final state briefly
+  const g=gconc(); if(!g) return;
+  try{ const d=await(await fetch('/api/runs?graph='+encodeURIComponent(g)+'&limit=1')).json();
+    const r=(d.runs||[])[0]; if(!r||r.status==='running'||r.status==='interrupted') return;
+    paintRunState(await(await fetch('/api/runs/'+r.id)).json()); }catch(e){}
+}
+function paintRunState(det){ // color the canvas to a run's current position
+  cy.nodes().removeClass('running done err wait pon rlbl'); cy.edges().removeClass('flow');
+  cy.$id('__start__').addClass('done');
+  const nodes=(det.spans||[]).filter(s=>s.type==='node'&&!s.parent_id);
+  let last=null;
+  for(const s of nodes){ const n=cy.$id(s.name); if(!n.length) continue; last=s.name;
+    if(s.status==='error') n.addClass('err');
+    else if(s.dur_ms!=null) n.addClass('done');
+    else n.addClass('running'); }
+  cy.edges().forEach(e=>{ const s=cy.$id(e.data('source')),t=cy.$id(e.data('target'));
+    if((s.hasClass('done')||e.data('source')==='__start__')&&(t.hasClass('done')||t.hasClass('running')||t.hasClass('err'))) e.addClass('flow'); });
+  if(det.status==='interrupted'){
+    // paused inside a node (interrupt() call) → that node; paused BEFORE a node
+    // (interrupt_before) → the sole successor of the last completed node
+    const iv=(det.spans||[]).find(s=>s.type==='interrupt');
+    let target=null;
+    if(iv&&iv.parent_id){ const pn=(det.spans||[]).find(s=>s.id===iv.parent_id); target=pn&&pn.name; }
+    if(!target&&last){ const outs=cy.edges(`[source="${last}"]`).map(e=>e.data('target')).filter(t=>t!=='__end__');
+      if(outs.length===1) target=outs[0]; }
+    if(!target) target=last;
+    if(target){ const n=cy.$id(target); n.removeClass('running done'); n.addClass('wait'); }
+  }
+  if(det.status==='done') cy.$id('__end__').addClass('done');
 }
 
 /* ---------- all-graphs canvas — nested subject boxes, each roll-up-able ---------- */
@@ -887,6 +999,8 @@ async function loadGraphCombined(list,force){
   const an=$('#allnote'); if(an){ an.style.display='';
     an.innerHTML=`${list.length} graphs · tap a title to roll up/down`+(gGroupSel()?'  ·  '+esc(GSEL):''); }
   const xb=$('#xray'); if(xb) xb.style.display='none';
+  const hb=$('#heatbtn'); if(hb) hb.style.display='none'; HEAT=false;
+  stopSingleLive(); replayClose(true);
   const root0=gtree(list), tops0=[...Object.keys(root0.groups),...root0.leaves];
   const ca=$('#collapseall'); if(ca){ ca.style.display='';
     ca.textContent=tops0.every(k=>COLLAPSED.has(k))?'⊞ Expand all':'⊟ Collapse all'; }
@@ -1307,7 +1421,8 @@ $('#do-run').onclick=async()=>{ let input; try{input=JSON.parse($('#input-json')
 
 async function runNow(input){
   const b=$('#newrun'); b.disabled=true;
-  cy.nodes().removeClass('running done err'); cy.edges().removeClass('flow'); let prev='__start__';
+  window.__streaming=true; replayClose(true);   // SSE owns the canvas while this run streams
+  cy.nodes().removeClass('running done err wait pon rlbl'); cy.edges().removeClass('flow'); let prev='__start__';
   try{
     const res=await fetch('/api/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input)});
     const rd=res.body.getReader(),dec=new TextDecoder(); let buf='';
@@ -1323,6 +1438,7 @@ async function runNow(input){
         else if(ev==='error'){ cy.$id(prev).addClass('err').removeClass('running'); toast('Run error: '+(d.message||'failed')); } } }
   }catch(e){ toast('Run failed: '+e.message); }
   b.disabled=false;
+  window.__streaming=false; __liveSig='';   // hand the canvas back to the live ticker
 }
 
 /* ---------- runs table (filters + pagination) ---------- */
@@ -1459,7 +1575,7 @@ async function openRun(id){
       <input id="sc-com" placeholder="comment (optional)" style="flex:1;min-width:120px">
       <button class="btn ghost" onclick="addScore('${id}')">Add score</button>
     </div>`;
-  html += `<div style="margin-top:6px"><button class="btn ghost" onclick='replay(${JSON.stringify(r.spans.filter(s=>s.type==="node").map(s=>({n:s.name,e:s.status==="error"})))})'>⟲ Replay on graph</button></div>`;
+  html += `<div style="margin-top:6px"><button class="btn ghost" onclick="replayRun('${id}')">⟲ Replay on graph</button></div>`;
   const openIds=[...document.querySelectorAll('#d-body .tr-detail')]
     .filter(e=>e.style.display==='block').map(e=>e.id);
   $('#d-body').innerHTML=html;
@@ -1488,9 +1604,19 @@ window.delScore=async(sid,rid)=>{
   await fetch('/api/scores/'+sid,{method:'DELETE'}); toast('Score removed'); openRun(rid);
   if(VIEW==='runs')loadRuns();
 };
+function parGroups(list){ // sibling spans that overlap in time = concurrent branches
+  const timed=list.filter(s=>s.dur_ms!=null).sort((a,b)=>(a.offset_ms||0)-(b.offset_ms||0));
+  const out=new Map(); let gi=0,cur=[],curEnd=-1;
+  const flush=()=>{ if(cur.length>1) cur.forEach((s,k)=>out.set(s.id,{n:cur.length,first:k===0})); if(cur.length>1)gi++; cur=[]; };
+  for(const s of timed){ const st=s.offset_ms||0,en=st+(s.dur_ms||0);
+    if(cur.length&&st+1<curEnd){ cur.push(s); curEnd=Math.max(curEnd,en); }
+    else{ flush(); cur=[s]; curEnd=en; } }
+  flush(); return out; }
 function renderSpans(list,byParent,total,depth){
+  const PG=parGroups(list);
   return list.map(s=>{
     const kids=byParent[s.id]||[];
+    const pg=PG.get(s.id);
     const left=((s.offset_ms||0)/total*100).toFixed(2), width=Math.max(1.2,(s.dur_ms||0)/total*100).toFixed(2);
     const meta=[s.params&&s.params.cached?'cached':null,
       s.dur_ms!=null?s.dur_ms+'ms':null,
@@ -1499,10 +1625,10 @@ function renderSpans(list,byParent,total,depth){
       s.cost_usd!=null?'$'+s.cost_usd.toFixed(4):null].filter(Boolean).join(' · ');
     const did='sp'+s.id;
     return `<div>
-      <div class="tr-row" onclick="tog('${did}',this)">
+      <div class="tr-row ${pg?'pgrp':''}" onclick="tog('${did}',this)">
         <div class="tr-main"><span class="indent" style="width:${depth*18}px"></span>
           <span class="caret">▶</span><span class="chip ${s.type}">${s.type}</span>
-          <span class="tr-name ${s.status==='error'?'err':''} ${/Middleware\./.test(s.name||'')?'fw':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}</div>
+          <span class="tr-name ${s.status==='error'?'err':''} ${/Middleware\./.test(s.name||'')?'fw':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}${pg?`<span class="badge-par" title="ran concurrently with ${pg.n-1} sibling${pg.n>2?'s':''} — branches overlap in time">∥ ${pg.n}</span>`:''}</div>
         <div class="tr-gantt"><div class="tr-bar ${s.type}" style="left:${left}%;width:${width}%"></div></div>
         <div class="tr-meta">${meta}</div>
       </div>
@@ -1536,15 +1662,83 @@ function kv(k,v){
   return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(${JSON.stringify(txt).replace(/"/g,'&quot;')});toast('Copied')">copy</button></div>${msgs?chatHtml(msgs):(todos?todoHtml(todos):`<pre>${esc(txt)}</pre>`)}</div>`; }
 window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
   el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
-window.replay=async(steps)=>{ closeAll(); switchView('graph');
-  if(!singleCanvas()) await focusGraph((window.__run||{}).graph||gconc());  // bare node ids need the single canvas
-  cy.nodes().removeClass('running done err'); cy.edges().removeClass('flow'); let prev='__start__';
-  for(const raw of steps){ const st=typeof raw==='string'?{n:raw,e:false}:raw;
-    cy.$id(prev).addClass('done').removeClass('running');
-    cy.edges(`[source="${prev}"][target="${st.n}"]`).addClass('flow');
-    if(st.e){ cy.$id(st.n).addClass('err'); toast('Run failed at '+st.n+' — tap the node for its source'); return; }
-    cy.$id(st.n).addClass('running'); prev=st.n; await new Promise(r=>setTimeout(r,380)); }
-  cy.$id(prev).addClass('done').removeClass('running'); cy.$id('__end__').addClass('done'); };
+/* ---------- run replay — real span timings on the canvas, with a scrubber ---------- */
+let RP=null;   // {spans,total,t,playing,raf,last,speed:'fit'|N}
+function replayOpen(){ const rb=$('#replaybar'); return !!rb&&rb.style.display!=='none'; }
+window.replayRun=async(id)=>{
+  let r=(window.__run&&window.__run.id===id)?window.__run:await(await fetch('/api/runs/'+id)).json();
+  const spans=(r.spans||[]).filter(s=>s.type==='node'&&!s.parent_id&&s.name);
+  if(!spans.length) return toast('No node spans to replay');
+  closeAll(); switchView('graph');
+  if(!singleCanvas()) await focusGraph(r.graph||gconc());  // bare node ids need the single canvas
+  stopSingleLive(); clearHeat();
+  RP={spans,total:Math.max(1,...spans.map(s=>(s.offset_ms||0)+(s.dur_ms||0))),
+      t:0,playing:false,raf:null,last:0,speed:$('#rp-speed').value||'fit'};
+  $('#replaybar').style.display='flex'; rpPaint(0); replayToggle();  // autoplay
+};
+window.replay=async(steps)=>{ // legacy signature — kept for older bookmarked drawers
+  const id=(window.__run||{}).id; if(id) return replayRun(id); };
+function rpMult(){ return RP.speed==='fit'?RP.total/8000:parseFloat(RP.speed); } // real-ms per playback-ms
+window.rpSpeed=(v)=>{ if(RP) RP.speed=v; };
+window.rpScrub=(v)=>{ if(!RP) return; RP.t=v/1000*RP.total; rpPaint(RP.t); };
+window.replayToggle=()=>{ if(!RP) return;
+  RP.playing=!RP.playing; $('#rp-play').textContent=RP.playing?'⏸':'▶';
+  if(RP.playing){ if(RP.t>=RP.total) RP.t=0; RP.last=performance.now(); RP.raf=requestAnimationFrame(rpTick); }
+  else if(RP.raf) cancelAnimationFrame(RP.raf);
+};
+function rpTick(now){ if(!RP||!RP.playing) return;
+  RP.t+=(now-RP.last)*rpMult(); RP.last=now;
+  if(RP.t>=RP.total){ RP.t=RP.total; rpPaint(RP.t); RP.playing=false; $('#rp-play').textContent='▶'; return; }
+  rpPaint(RP.t); RP.raf=requestAnimationFrame(rpTick);
+}
+function rpPaint(t){ if(!cy||!RP) return;
+  cy.nodes().removeClass('running done err wait pon rlbl'); cy.edges().removeClass('flow');
+  cy.$id('__start__').addClass('done');
+  for(const s of RP.spans){ const st=s.offset_ms||0,en=st+(s.dur_ms||0);
+    const n=cy.$id(s.name); if(!n.length) continue;
+    if(s.dur_ms!=null&&t>=en){
+      n.addClass(s.status==='error'?'err':'done');
+      n.data('hlabel',(n.data('label')||s.name)+'\n'+fmtms(s.dur_ms)); n.addClass('rlbl');
+    } else if(t>=st){ n.addClass('running'); }
+  }
+  cy.edges().forEach(e=>{ const sN=cy.$id(e.data('source')),tN=cy.$id(e.data('target'));
+    if((sN.hasClass('done')||sN.hasClass('err')||e.data('source')==='__start__')&&
+       (tN.hasClass('done')||tN.hasClass('running')||tN.hasClass('err'))) e.addClass('flow'); });
+  if(t>=RP.total) cy.$id('__end__').addClass('done');
+  $('#rp-scrub').value=Math.round(t/RP.total*1000);
+  $('#rp-time').textContent=(t/1000).toFixed(2)+'s / '+(RP.total/1000).toFixed(2)+'s';
+}
+window.replayClose=(silent)=>{ const rb=$('#replaybar'); if(!rb||rb.style.display==='none'){ if(!silent&&RP)RP=null; return; }
+  if(RP&&RP.raf) cancelAnimationFrame(RP.raf); RP=null;
+  rb.style.display='none'; $('#rp-play').textContent='▶';
+  if(cy&&singleCanvas()){ cy.nodes().removeClass('running done err wait pon rlbl'); cy.edges().removeClass('flow');
+    __liveSig=''; startSingleLive(); }   // hand the canvas back to the live ticker
+};
+
+/* ---------- duration heatmap — where does this graph spend its time? ---------- */
+let HEAT=false;
+function clearHeat(){ HEAT=false; const hb=$('#heatbtn'); if(hb) hb.textContent='▦ Heat';
+  if(cy) cy.nodes().removeClass('heat heat0 heat1 heat2 heat3 heat4'); }
+window.toggleHeat=async()=>{
+  if(!cy||!singleCanvas()) return;
+  if(HEAT){ clearHeat(); return; }
+  const g=gconc();
+  let spans=null;
+  if(window.__run&&window.__run.graph===g&&(window.__run.spans||[]).some(s=>s.type==='node')) spans=window.__run.spans;
+  else{ try{ const d=await(await fetch('/api/runs?graph='+encodeURIComponent(g)+'&limit=10')).json();
+      const r=(d.runs||[]).find(x=>x.status==='done')||(d.runs||[])[0];
+      if(r) spans=(await(await fetch('/api/runs/'+r.id)).json()).spans; }catch(e){} }
+  const per={}; (spans||[]).filter(s=>s.type==='node'&&!s.parent_id&&s.dur_ms!=null)
+    .forEach(s=>{ per[s.name]=(per[s.name]||0)+s.dur_ms; });
+  const vals=Object.values(per);
+  if(!vals.length) return toast('No timed runs for this graph yet — run it once, then Heat');
+  const max=Math.max(...vals);
+  cy.nodes().forEach(n=>{ const v=per[n.id()]; if(v==null||n.data('terminal')) return;
+    const b=Math.min(4,Math.floor(v/max*5));
+    n.data('hlabel',(n.data('label')||n.id())+'\n'+fmtms(v));
+    n.addClass('heat heat'+b); });
+  HEAT=true; const hb=$('#heatbtn'); if(hb) hb.textContent='▦ Heat ✓';
+};
 window.showSpanSource=async(sid)=>{
   const s=((window.__run||{}).spans||[]).find(x=>x.id===sid); if(!s) return;
   const el=document.getElementById('src-'+sid); if(!el) return;
@@ -1557,6 +1751,7 @@ window.showSpanSource=async(sid)=>{
 
 /* ---------- human-in-the-loop ---------- */
 async function consumeRunStream(res){
+  window.__streaming=true;
   const rd=res.body.getReader(),dec=new TextDecoder(); let buf='';
   while(true){ const {value,done}=await rd.read(); if(done)break; buf+=dec.decode(value,{stream:true});
     let ps=buf.split('\n\n'); buf=ps.pop();
@@ -1566,6 +1761,7 @@ async function consumeRunStream(res){
       else if(ev==='interrupted'){ toast('Paused again — awaiting human'); }
       else if(ev==='done'){ toast('Resumed run complete'); }
       else if(ev==='error'){ toast('Resume error: '+(d.message||'failed')); } } }
+  window.__streaming=false; __liveSig='';
   if(VIEW==='runs') loadRuns();
 }
 function parseMaybeJSON(v){ if(v==='')return undefined;

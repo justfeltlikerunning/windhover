@@ -69,6 +69,29 @@ run `windhover` in the project directory and every graph the file defines is ser
   fields mean your state type isn't introspectable (e.g. `dict`) - you can still paste
   any JSON.
 
+## How-to: read the canvas (live status, replay, heat)
+
+The single-graph canvas is more than wiring - it reflects execution:
+
+- **Live status, any run source.** While the Graph tab is open, the canvas polls for
+  active runs on the current graph - including runs launched by a scheduler or an
+  external app, not just the New-run button. A running node pulses; a run paused at a
+  human gate shows a dashed **awaiting** halo on the node it stopped at (an `interrupt()`
+  call lights its own node; `interrupt_before` lights the node it paused in front of),
+  plus a banner chip that opens the run. When nothing is active the canvas shows the
+  last run's final state.
+- **⟲ Replay on graph** (in any run's detail pane) replays that run on the canvas with
+  its **real span timings**: nodes light in execution order with per-node duration
+  labels, concurrent branches light **together**, and a scrubber lets you play, pause,
+  and drag through the run. "fit 8s" compresses any run to an 8-second playback;
+  1×-10× play it against the clock.
+- **▦ Heat** colors each node's border by time spent (cool teal → hot red, latest run,
+  or the run open in the detail pane) with the per-node total on the node - the slow
+  step jumps out.
+- **Sequential vs parallel at a glance:** in the run detail timeline, sibling spans that
+  overlap in time carry a **∥ N** badge and a tinted track - a staircase of bars is a
+  sequential chain, stacked tinted bars are a concurrent fan-out.
+
 ## How-to: trace from your own app (no local graph needed)
 
 ```python
