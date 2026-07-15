@@ -947,3 +947,28 @@ def test_pricing_env_override(tmp_path, monkeypatch):
         assert set(tr._load_pricing()) == {"my-model"}   # env table wins, _-keys dropped
     finally:
         tr._PRICING = None
+
+
+def test_report_generation():
+    # any run -> a readable Markdown report, no graph knowledge required
+    from windhover.report import render_run_report, _salvage, _maybe_json
+    run = {"id": "abc123def456", "graph": "demo", "status": "done",
+           "duration_ms": 1500, "node_count": 3, "cost_usd": 0.01,
+           "input": {"account": "X"},
+           "spans": [
+               {"type": "node", "name": "detect", "dur_ms": 500,
+                "output": {"findings": [{"well": "A1", "severity": 3, "verdict": "HIT"}]}},
+               {"type": "node", "name": "review", "dur_ms": 900,
+                # double-encoded JSON string, the common real shape
+                "output": '{"review": {"llm": {"summary": "Nine wells failed. Systemic issue."}}}'},
+           ]}
+    md = render_run_report(run)
+    assert md.startswith("# demo — run report")
+    assert "## Summary" in md and "Nine wells failed" in md      # narrative surfaced up top
+    assert "| well |" in md and "A1" in md                        # findings -> table
+    assert "### detect" in md and "### review" in md              # per-node steps
+    # salvage: a clipped JSON string (missing closing quotes) still yields the narrative
+    clipped = '{"review": {"llm": {"summary": "Big report that got cut off mid sente'
+    assert "Big report that got cut off" in _salvage(clipped)
+    assert _maybe_json('{"a": 1}') == {"a": 1}                    # decodes double-encoded
+    assert _maybe_json("plain text") == "plain text"

@@ -11,14 +11,14 @@ import os, sys, json, time, hashlib, threading, queue, subprocess, importlib, tr
 import uuid as uuid_mod
 from pathlib import Path
 from fastapi import FastAPI, Request
-from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import Config
 from .store import Store
 from .tracer import SpanBuilder, db_sink, apply_to_store, _trunc
-from . import artifacts, push
+from . import artifacts, push, report
 
 cfg = Config.from_env()
 store = Store(cfg.db_path)
@@ -735,6 +735,21 @@ def api_artifacts(run_id: str):
     if not run:
         return JSONResponse({"error": "unknown run"}, 404)
     return JSONResponse({"artifacts": artifacts.run_artifacts(run)})
+
+
+@app.get("/api/runs/{run_id}/report.md")
+def api_report_md(run_id: str, download: int = 1):
+    """A self-contained Markdown report for one run — the narrative and findings its
+    nodes produced, rendered readable and shareable. Works for any graph, no file needed."""
+    run = store.run_detail(run_id)
+    if not run:
+        return JSONResponse({"error": "unknown run"}, 404)
+    md = report.render_run_report(run)
+    headers = {"X-Content-Type-Options": "nosniff"}
+    if download:
+        fname = f"{(run.get('graph') or 'run')}-{run_id[:8]}.md".replace("/", "-").replace(" ", "_")
+        headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return Response(md, media_type="text/markdown; charset=utf-8", headers=headers)
 
 
 @app.get("/api/runs/{run_id}/artifact")

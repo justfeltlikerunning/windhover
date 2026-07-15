@@ -82,7 +82,14 @@ def _jsonable(o: Any):
     return str(o)
 
 
-def _trunc(v: Any, n: int = 4000) -> Any:
+# Per-payload capture cap. The default (24k) is generous enough to keep a full LLM
+# report/narrative — the thing a run is FOR — instead of clipping it at a few KB.
+# Raise via WINDHOVER_MAX_OUTPUT when a graph writes very large outputs.
+_MAX_OUT = max(4000, int(os.environ.get("WINDHOVER_MAX_OUTPUT", "24000")))
+
+
+def _trunc(v: Any, n: int | None = None) -> Any:
+    n = n or _MAX_OUT
     s = json.dumps(v, default=_jsonable)
     return json.loads(s) if len(s) <= n else s[:n] + "…"
 

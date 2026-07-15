@@ -240,6 +240,9 @@ td.r,th.r{text-align:right}
 .kv pre{margin:0;white-space:pre-wrap;word-break:break-word;background:var(--surface2);border:1px solid var(--border);border-radius:8px;
   padding:10px 12px;font:12px/1.55 var(--mono);color:var(--text);max-height:280px;overflow:auto}
 .kv pre.err{color:var(--err);background:var(--err-weak);border-color:transparent}
+.kv .prose{white-space:pre-wrap;word-break:break-word;line-height:1.55;font-size:13px;color:var(--text);
+  background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+  border-radius:8px;padding:11px 13px;margin-bottom:6px;max-height:420px;overflow:auto}
 .chat{display:flex;flex-direction:column;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;max-height:320px;overflow:auto}
 .msg{display:flex;gap:8px;font-size:12.5px;line-height:1.5}
 .msg .mrole{flex:none;font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:2px;width:64px;text-align:right}
@@ -508,6 +511,7 @@ a.copy{text-decoration:none}
       <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet} Overview</button>
       <button data-v="graph" class="on">${ICON.graph} Graph</button>
       <button data-v="runs">${ICON.list} Runs</button>
+      <button data-v="reports">${ICON.doc} Reports</button>
       <button data-v="sessions">${ICON.layers} Sessions</button>
     </nav>
     <div class="nav-sec">Analyze</div>
@@ -592,6 +596,23 @@ a.copy{text-decoration:none}
           <div id="runs-detail-slot" class="runs-detail" style="display:none"></div>
         </div>
       </div>
+      <div id="view-reports" style="display:none">
+        <div class="page">
+          <div class="page-head"><h1>Reports</h1><span class="sub" id="reports-sub"></span></div>
+          <p class="mono" style="font-size:11.5px;color:var(--muted);margin:-4px 0 12px">
+            Every run rendered as a downloadable Markdown report — its narrative, findings, and any files it wrote. Filter to runs that need attention or produced files.</p>
+          <div class="rtools">
+            <select id="rep-filter">
+              <option value="all">All runs</option>
+              <option value="alerts" selected>Needs attention (errors · awaiting approval · flagged)</option>
+              <option value="files">Produced files</option>
+              <option value="done">Completed</option>
+            </select>
+            <span class="spacer"></span>
+          </div>
+          <div class="card"><div id="reports-wrap"><div class="empty">Loading…</div></div></div>
+        </div>
+      </div>
       <div id="view-sessions" style="display:none">
         <div class="page">
           <div class="page-head"><h1>Sessions</h1><span class="sub" id="sess-sub"></span></div>
@@ -628,7 +649,7 @@ a.copy{text-decoration:none}
   <button data-v="fleet" class="nav-fleet" style="display:none">${ICON.fleet}<span>Overview</span></button>
   <button data-v="graph" class="on">${ICON.graph}<span>Graph</span></button>
   <button data-v="runs">${ICON.list}<span>Runs</span></button>
-  <button data-v="sessions">${ICON.layers}<span>Sessions</span></button>
+  <button data-v="reports">${ICON.doc}<span>Reports</span></button>
   <button data-v="stats">${ICON.chart}<span>Stats</span></button>
   <button data-v="memory" class="nav-mem" style="display:none">${ICON.mem}<span>Memory</span></button>
 </div>
@@ -699,6 +720,7 @@ const ICON = {
   moon:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 13.5A8 8 0 1 1 10.5 4 6.5 6.5 0 0 0 20 13.5z"/></svg>',
   x:'<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
   fleet:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="3.5" y="3.5" width="7.4" height="7.4" rx="1.6"/><rect x="13.1" y="3.5" width="7.4" height="7.4" rx="1.6"/><rect x="3.5" y="13.1" width="7.4" height="7.4" rx="1.6"/><rect x="13.1" y="13.1" width="7.4" height="7.4" rx="1.6"/></svg>',
+  doc:'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><path d="M9 12h6M9 16h6"/></svg>',
 };
 document.body.innerHTML = document.body.innerHTML.replaceAll(/\$\{ICON\.(\w+)\}/g,(m,k)=>ICON[k]||'');
 
@@ -1294,7 +1316,7 @@ function switchView(v){ VIEW=v;
   if(location.hash!=='#'+v) history.replaceState(null,'','#'+v);
   $$('.nav button,.bottom-nav button').forEach(b=>b.classList.toggle('on',b.dataset.v===v));
   $('#crumb').textContent=v==='fleet'?'Overview':v[0].toUpperCase()+v.slice(1);
-  for(const k of ['graph','runs','sessions','memory','stats','fleet'])
+  for(const k of ['graph','runs','reports','sessions','memory','stats','fleet'])
     $('#view-'+k).style.display=v===k?'':'none';
   // navigating dismisses a FLOATING detail drawer (node/history/diff, and the
   // full-screen run detail on mobile); the docked Runs pane stays with its view
@@ -1303,7 +1325,7 @@ function switchView(v){ VIEW=v;
   // the graph selector scopes single-graph views — meaningless on the
   // cross-graph fleet, so it steps aside there
   const gp=$('#gpill'); if(gp) gp.style.display=v==='fleet'?'none':'';
-  if(v==='runs')loadRuns(); if(v==='sessions')loadSessions(); if(v==='memory')loadMemory();
+  if(v==='runs')loadRuns(); if(v==='reports')loadReports(); if(v==='sessions')loadSessions(); if(v==='memory')loadMemory();
   if(v==='stats'){loadStats();loadDatasets();}
   if(v==='fleet')loadFleet();
   clearInterval(window.__fleetT);
@@ -1449,6 +1471,47 @@ function runParams(){ const p=new URLSearchParams();
   if(RF.q)p.set('q',RF.q); if(RF.status)p.set('status',RF.status);
   if(RF.tag)p.set('tag',RF.tag); if(RF.bookmarked)p.set('bookmarked','1');
   if(RF.session)p.set('session',RF.session); if(RF.graph)p.set('graph',RF.graph); return p; }
+/* ---------- Reports: every run as a downloadable report; alerts + files up front ---------- */
+document.addEventListener('change',e=>{ if(e.target&&e.target.id==='rep-filter') loadReports(); });
+async function loadReports(){
+  const wrap=$('#reports-wrap'); wrap.innerHTML='<div class="empty">Loading…</div>';
+  const f=$('#rep-filter').value;
+  const gsel=(multiGraph()&&GSEL)?'&graph='+encodeURIComponent(GSEL):'';
+  const get=q=>fetch('/api/runs?'+q+gsel).then(r=>r.json()).then(d=>d.runs||[]).catch(()=>[]);
+  let runs=[];
+  if(f==='alerts'){
+    // generic "needs attention": failed, awaiting a human (interrupted), or user-flagged —
+    // signals any graph produces without special wiring
+    const [er,intr,bk]=await Promise.all([get('status=error&limit=100'),get('status=interrupted&limit=100'),get('bookmarked=1&limit=100')]);
+    const seen=new Set(); runs=[...er,...intr,...bk].filter(r=>!seen.has(r.id)&&seen.add(r.id))
+      .sort((a,b)=>(b.started_ms||0)-(a.started_ms||0));
+  } else if(f==='files'){
+    const base=await get('limit=100');
+    const checks=await Promise.all(base.map(r=>fetch('/api/runs/'+r.id+'/artifacts')
+      .then(x=>x.json()).then(a=>({r,arts:a.artifacts||[]})).catch(()=>({r,arts:[]}))));
+    runs=checks.filter(c=>c.arts.length).map(c=>Object.assign(c.r,{_arts:c.arts}));
+  } else {
+    runs=await get('limit=100'+(f==='done'?'&status=done':''));
+  }
+  $('#reports-sub').textContent=runs.length?`${runs.length} run${runs.length===1?'':'s'}`:'';
+  if(!runs.length){ wrap.innerHTML=`<div class="empty"><div class="t">Nothing here</div>${
+    f==='alerts'?'No failed, awaiting-approval, or flagged runs.':f==='files'?'No runs wrote downloadable files yet.':'No runs match.'}</div>`; return; }
+  const tok=whToken()?'?token='+encodeURIComponent(whToken()):'';
+  wrap.innerHTML=`<div style="overflow:auto"><table>
+    <thead><tr><th>Status</th><th>Run</th><th class="r">Detail</th><th class="r">Report &amp; files</th></tr></thead>
+    <tbody>${runs.map(r=>`<tr>
+      <td><span class="status ${r.status}"><span class="d"></span>${r.status}</span></td>
+      <td><div style="font-weight:600">${gnameHtml(r.graph)}</div>
+        <div class="mono" style="font-size:10.5px;color:var(--muted)">${r.id.slice(0,10)} · ${new Date(r.started_ms).toLocaleString()}</div>
+        ${(r.tags||[]).map(t=>`<span class="tagchip">${esc(t)}</span>`).join('')}</td>
+      <td class="r mono" style="font-size:11px;color:var(--muted)">${r.node_count??0} nodes${
+        r._arts&&r._arts.length?`<br>${r._arts.length} file${r._arts.length>1?'s':''}`:''}</td>
+      <td class="r" style="white-space:nowrap">
+        <button class="btn ghost" onclick="previewReport('${r.id}')">👁 Report</button>
+        <a class="btn ghost" href="/api/runs/${r.id}/report.md${tok}" download>⬇ .md</a>
+        <button class="btn ghost" onclick="openRun('${r.id}')">Open</button></td>
+    </tr>`).join('')}</tbody></table></div>`;
+}
 async function loadRuns(){
   const p=runParams(); p.set('limit',RF.limit); p.set('offset',RF.offset);
   const d=await(await fetch('/api/runs?'+p)).json();
@@ -1577,7 +1640,10 @@ async function openRun(id){
       <input id="sc-com" placeholder="comment (optional)" style="flex:1;min-width:120px">
       <button class="btn ghost" onclick="addScore('${id}')">Add score</button>
     </div>`;
-  html += `<div style="margin-top:6px"><button class="btn ghost" onclick="replayRun('${id}')">⟲ Replay on graph</button></div>`;
+  html += `<div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn ghost" onclick="replayRun('${id}')">⟲ Replay on graph</button>
+    <a class="btn ghost" href="/api/runs/${id}/report.md${whToken()?'?token='+encodeURIComponent(whToken()):''}" download>⬇ Report (.md)</a>
+    <button class="btn ghost" onclick="previewReport('${id}')">👁 Preview report</button></div>`;
   const openIds=[...document.querySelectorAll('#d-body .tr-detail')]
     .filter(e=>e.style.display==='block').map(e=>e.id);
   $('#d-body').innerHTML=html;
@@ -1655,13 +1721,33 @@ function chatHtml(arr){ return `<div class="chat">${arr.map(m=>{
   const tc=(m.tool_calls||[]).map(c=>`<div class="mono" style="font-size:11px;opacity:.8">⚒ ${esc(c.name||'tool')}(${esc(JSON.stringify(c.args||{}).slice(0,120))})</div>`).join('');
   return `<div class="msg ${esc(role)}"><span class="mrole">${esc(role)}</span><div>${esc(body).slice(0,3000)||'<i>—</i>'}${tc}</div></div>`;
 }).join('')}</div>`; }
+// a node output is often a JSON-encoded string (double-encoded state) — decode so it
+// renders as structure, not one escaped blob
+function decodeJSONish(v){ if(typeof v==='string'){ const s=v.trim();
+  if(s&&(s[0]==='{'||s[0]==='[')){ try{ return JSON.parse(s); }catch(e){} } } return v; }
+const NARR=['summary','narrative','report','text','message','content','recommendation','analysis','explanation','assessment'];
+// find the dominant narrative (an LLM's written answer) anywhere in a value, so the
+// reader sees prose instead of hunting through JSON — works for any graph's shape
+function narrativeOf(v){ let keyed='',bare=''; const stack=[decodeJSONish(v)]; let g=0;
+  while(stack.length&&g++<8000){ const cur=decodeJSONish(stack.pop());
+    if(cur&&typeof cur==='object'){ for(const kk in cur){ const dv=decodeJSONish(cur[kk]);
+      if(NARR.includes(kk.toLowerCase())&&typeof dv==='string'){ if(dv.length>keyed.length) keyed=dv; }
+      else stack.push(cur[kk]); } }
+    else if(typeof cur==='string'&&cur.length>bare.length&&cur.length>240&&cur.trim()[0]!=='{') bare=cur; }
+  // an explicit narrative field is prose at any reasonable length; a bare string must be long
+  if(keyed.length>=20) return keyed;
+  return bare.length>=120?bare:''; }
 function kv(k,v){
+  v=decodeJSONish(v);
   const msgs=Array.isArray(v)&&v.length&&v.every(isMsg)?v
     :(v&&typeof v==='object'&&Array.isArray(v.messages)&&v.messages.length&&v.messages.every(isMsg)?v.messages:null);
   const todos=Array.isArray(v)&&v.length&&v.every(isTodo)?v
     :(v&&typeof v==='object'&&Array.isArray(v.todos)&&v.todos.length&&v.todos.every(isTodo)?v.todos:null);
   const txt=typeof v==='string'?v:JSON.stringify(v,null,2);
-  return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(${JSON.stringify(txt).replace(/"/g,'&quot;')});toast('Copied')">copy</button></div>${msgs?chatHtml(msgs):(todos?todoHtml(todos):`<pre>${esc(txt)}</pre>`)}</div>`; }
+  const narr=(msgs||todos)?'':narrativeOf(v);
+  const prose=narr?`<div class="prose">${esc(narr)}</div>`:'';
+  const body=msgs?chatHtml(msgs):todos?todoHtml(todos):(prose+`<pre>${esc(txt)}</pre>`);
+  return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(${JSON.stringify(txt).replace(/"/g,'&quot;')});toast('Copied')">copy</button></div>${body}</div>`; }
 window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
   el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
 /* ---------- run replay — real span timings on the canvas, with a scrubber ---------- */
@@ -2005,6 +2091,17 @@ function artChips(runId,obj){
     </div>`;}).join('');
 }
 function closeArt(){ const m=$('#art-modal'); m.classList.remove('on'); $('#art-body').innerHTML=''; }
+// render the generated Markdown report in the artifact modal (marked, sandboxed iframe)
+window.previewReport=async(runId)=>{
+  $('#art-title').textContent='report · '+runId.slice(0,8);
+  const dl=$('#art-dl'); dl.href='/api/runs/'+runId+'/report.md'+(whToken()?'?token='+encodeURIComponent(whToken()):''); dl.setAttribute('download','');
+  $('#art-body').innerHTML='<pre>rendering…</pre>'; $('#art-modal').classList.add('on');
+  try{
+    const t=await(await fetch('/api/runs/'+runId+'/report.md?download=0')).text();
+    await _loadScript('/static/vendor/marked.min.js');
+    _renderHtmlFrame(marked.parse(t));
+  }catch(e){ $('#art-body').innerHTML='<pre>could not render report</pre>'; }
+};
 window.previewArt=async(runId,encPath,kind,ext,name)=>{
   const tok=whToken()?'&token='+encodeURIComponent(whToken()):'';
   const url=`/api/runs/${runId}/artifact?path=${encPath}${tok}`;
