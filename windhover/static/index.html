@@ -514,7 +514,7 @@ a.copy{text-decoration:none}
       <button data-v="stats">${ICON.chart} Stats</button>
       <button data-v="memory" id="nav-mem" style="display:none">${ICON.mem} Memory</button>
     </nav>
-    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><a href="https://buymeacoffee.com/justfeltlikerunning" target="_blank" rel="noopener" title="Buy me a coffee" style="text-decoration:none;filter:grayscale(35%)">☕</a><span class="mono" id="ver">v0.31</span></div>
+    <div class="side-foot"><span class="live-dot" id="live-dot" title="live topology"></span><span id="foot-note">watching</span><span class="spacer"></span><a href="https://buymeacoffee.com/justfeltlikerunning" target="_blank" rel="noopener" title="Buy me a coffee" style="text-decoration:none;filter:grayscale(35%)">☕</a><span class="mono" id="ver"></span></div>
   </aside>
 
   <main>
@@ -836,6 +836,7 @@ function gnameHtml(g){ // muted path prefix, bold leaf — "ops/etl/" + "nightly
 async function loadGraphList(){
   try{
     const d=await(await fetch('/api/graphs')).json();
+    if(d.version) $('#ver').textContent='v'+d.version;
     window.__graphList=d.graphs||[];
     const multi=window.__graphList.length>1;
     // ''=All graphs is only meaningful multi-graph; otherwise snap to a real one

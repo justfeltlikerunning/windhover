@@ -917,3 +917,20 @@ def test_artifacts_extract_classify_resolve():
     assert resolve(run, os.path.join(d, "gone.pdf")) is None
     assert resolve(run, "/etc/passwd") is None          # never, even though it exists
     print("artifacts extract/classify/resolve OK")
+
+
+def test_version_single_source():
+    # __version__ must come from installed dist metadata (or the dev fallback),
+    # never a hand-maintained string — the 0.32.0 release shipped with three
+    # divergent versions (pyproject 0.32.0 / __init__ 0.3.0 / UI footer v0.31).
+    from importlib.metadata import PackageNotFoundError, version
+    import windhover
+    try:
+        expected = version("windhover")
+    except PackageNotFoundError:
+        expected = "0.0.0.dev0"
+    assert windhover.__version__ == expected
+    html = open(os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                             "windhover", "static", "index.html")).read()
+    import re
+    assert not re.search(r'id="ver">v?\d', html), "footer version must not be hardcoded"

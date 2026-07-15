@@ -14,6 +14,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from . import __version__
 from .config import Config
 from .store import Store
 from .tracer import SpanBuilder, db_sink, apply_to_store, _trunc
@@ -267,7 +268,8 @@ def _template(schema: dict) -> dict:
 # ---- endpoints ------------------------------------------------------------
 @app.get("/api/graphs")
 def api_graphs():
-    return JSONResponse({"graphs": list(GRAPHS.keys()), "default": _default_name()})
+    return JSONResponse({"graphs": list(GRAPHS.keys()), "default": _default_name(),
+                         "version": __version__})
 
 
 @app.get("/api/graph")
