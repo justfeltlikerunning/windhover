@@ -247,9 +247,20 @@ export WINDHOVER_VAPID_SUBJECT=mailto:you@yourdomain.com
 - On the device: open the HTTPS URL → add to home screen → open the installed app →
   tap the **🔔** (iOS requires the tap to come from an installed PWA). A test push
   confirms delivery. The bell is stateful: filled = on, slashed = blocked in OS settings.
-- Alerts fire on **error** and **interrupted** runs - the same events as
-  `WINDHOVER_WEBHOOK`. Tapping one deep-links to the run (or to the Fleet queue when
-  several runs are awaiting approval). Expired subscriptions are pruned automatically.
+- **What fires an alert** is configurable via `WINDHOVER_ALERT_ON` (default
+  `error,interrupted`). Add `done` to alert when a run **completes** — the push then
+  reads *"<graph> — report ready"* with the run's own narrative as the body, tapping
+  through to the run and its report. Add `tagged` to alert on any run that carries a
+  tag (a graph's generic "this one matters" signal — e.g. tag a run only when it found
+  something). Example for a weekly job: `WINDHOVER_ALERT_ON=error,interrupted,done`.
+- Both **Web Push and `WINDHOVER_WEBHOOK`** fire on the same condition. The webhook
+  body now includes `summary` (the run's narrative headline) and `report_url`, so a
+  downstream notifier can relay the gist and link straight to `/api/runs/<id>/report.md`.
+- **`WINDHOVER_REPORT_DIR=/path`** writes every run's generated Markdown report to that
+  directory as it closes — point it at a synced/shared folder and reports land as files
+  automatically, no graph code and no push transport required.
+- Tapping a push deep-links to the run (or the Fleet queue when several await approval).
+  Expired subscriptions are pruned automatically.
 - `WINDHOVER_DIGEST=07:30` adds one daily summary push (runs/errors/awaiting across
   all graphs). Quiet days send nothing.
 - Webhooks can route per graph: `WINDHOVER_WEBHOOK="https://hooks.example/default,billing=https://hooks.example/billing"`.

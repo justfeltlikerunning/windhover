@@ -29,6 +29,12 @@ class Config:
     vapid_subject: str      # WINDHOVER_VAPID_SUBJECT: contact (mailto:/https URL) sent to the push service
     digest: str             # WINDHOVER_DIGEST: "HH:MM" local time for a daily summary push ("" = off)
     webhook_map: dict       # per-graph webhook overrides from WINDHOVER_WEBHOOK "name=url" entries
+    alert_on: tuple         # WINDHOVER_ALERT_ON: which run outcomes fire push/webhook
+    report_dir: str         # WINDHOVER_REPORT_DIR: write each alerting run's .md report here ("" = off)
+
+    @property
+    def alerts_report(self) -> bool:
+        return "done" in self.alert_on or "tagged" in self.alert_on
 
     @property
     def push_enabled(self) -> bool:
@@ -121,4 +127,7 @@ class Config:
             vapid_subject=os.environ.get("WINDHOVER_VAPID_SUBJECT", "mailto:windhover@localhost"),
             digest=os.environ.get("WINDHOVER_DIGEST", ""),
             webhook_map=webhook_map,
+            alert_on=tuple(s.strip().lower() for s in
+                           os.environ.get("WINDHOVER_ALERT_ON", "error,interrupted").split(",") if s.strip()),
+            report_dir=os.environ.get("WINDHOVER_REPORT_DIR", ""),
         )

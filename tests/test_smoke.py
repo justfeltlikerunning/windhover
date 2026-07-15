@@ -972,3 +972,21 @@ def test_report_generation():
     assert "Big report that got cut off" in _salvage(clipped)
     assert _maybe_json('{"a": 1}') == {"a": 1}                    # decodes double-encoded
     assert _maybe_json("plain text") == "plain text"
+
+
+def test_alert_triggers_and_report_headline():
+    # configurable alert triggers + report headline for the notification body
+    import os, importlib
+    os.environ["WINDHOVER_ALERT_ON"] = "error,interrupted,done,tagged"
+    import windhover.config as cfgmod
+    importlib.reload(cfgmod)
+    c = cfgmod.Config.from_env()
+    assert c.alert_on == ("error", "interrupted", "done", "tagged")
+    assert c.alerts_report is True
+    from windhover.report import _find_headline
+    run = {"spans": [{"type": "node", "name": "review",
+            "output": '{"review":{"llm":{"summary":"Nine wells failed within six days."}}}'}]}
+    h = _find_headline(run)
+    assert h and "Nine wells failed" in h[0]
+    os.environ.pop("WINDHOVER_ALERT_ON", None)
+    importlib.reload(cfgmod)

@@ -162,27 +162,64 @@ if cfg.retention_days > 0:
     threading.Thread(target=_retention_loop, daemon=True).start()
 
 
-def _fire_webhook(summary: dict) -> None:
-    """POST a compact alert when a run needs attention. Fire-and-forget.
-    Per-graph overrides (WINDHOVER_WEBHOOK "name=url" entries) win over the
-    default URL; a graph with neither stays silent."""
-    if summary.get("status") not in ("error", "interrupted"):
+def _alert_match(summary: dict, run: dict) -> bool:
+    """Does this closed run meet the configured alert condition (WINDHOVER_ALERT_ON)?
+    Statuses (error/interrupted/done) match by status; 'tagged' matches any run that
+    carries tags — a graph's generic 'this one matters' signal, no Windhover change."""
+    st = summary.get("status")
+    if st in cfg.alert_on:
+        return True
+    if "tagged" in cfg.alert_on and (run.get("tags")):
+        return True
+    return False
+
+
+def _report_headline(run: dict) -> str:
+    """One-line gist for a notification — the run's own narrative if it wrote one."""
+    try:
+        h = report._find_headline(run)
+        if h:
+            line = " ".join(h[0].split())
+            return line[:180] + ("…" if len(line) > 180 else "")
+    except Exception:
+        pass
+    return ""
+
+
+def _materialize_report(run: dict) -> None:
+    """Drop the generated Markdown report into WINDHOVER_REPORT_DIR so reports land as
+    files (a synced folder, a share) without any graph involvement."""
+    if not cfg.report_dir:
         return
+    try:
+        os.makedirs(cfg.report_dir, exist_ok=True)
+        fn = f"{(run.get('graph') or 'run')}-{run['id'][:8]}.md".replace("/", "-").replace(" ", "_")
+        with open(os.path.join(cfg.report_dir, fn), "w", encoding="utf-8") as f:
+            f.write(report.render_run_report(run))
+    except Exception:
+        pass
+
+
+def _fire_webhook(summary: dict, run: dict) -> None:
+    """POST a compact alert for a matching run. Fire-and-forget. Per-graph overrides
+    (WINDHOVER_WEBHOOK "name=url") win over the default URL."""
     def _post():
         try:
             import urllib.request
-            run = store.run_detail(summary["id"]) or summary
             hook = cfg.webhook_map.get(run.get("graph") or _default_name()) or cfg.webhook
             if not hook:
                 return
+            graph = run.get("graph") or _default_name()
             body = {
-                "source": "windhover", "graph": run.get("graph") or _default_name(),
+                "source": "windhover", "graph": graph,
                 "run_id": summary["id"], "status": summary["status"],
                 "duration_ms": summary.get("duration_ms"),
                 "session": run.get("session"), "thread_id": run.get("thread_id"),
+                "tags": run.get("tags"),
                 "error": (str(summary.get("error") or "").strip().splitlines() or [None])[-1],
-                "text": f"[windhover] run {summary['id']} {summary['status']}"
-                        f" ({run.get('graph') or _default_name()})",
+                "summary": _report_headline(run),
+                "report_url": f"/api/runs/{summary['id']}/report.md",
+                "text": f"[windhover] run {summary['id']} {summary['status']} ({graph})",
             }
             req = urllib.request.Request(
                 hook, data=json.dumps(body).encode(),
@@ -193,17 +230,20 @@ def _fire_webhook(summary: dict) -> None:
     threading.Thread(target=_post, daemon=True).start()
 
 
-def _push_alert(summary: dict) -> None:
-    """Send a Web Push notification when a run needs attention. Fire-and-forget."""
-    if summary.get("status") not in ("error", "interrupted"):
-        return
-    run = store.run_detail(summary["id"]) or summary
+def _push_alert(summary: dict, run: dict) -> None:
+    """Send a Web Push notification for a matching run. Fire-and-forget."""
     graph = run.get("graph") or _default_name()
+    st = summary["status"]
     err = (str(summary.get("error") or "").strip().splitlines() or [""])[-1]
-    title = f"Windhover — run {summary['status']}"
-    body = f"{graph} · {summary['id']}" + (f"\n{err}" if err else "")
+    headline = _report_headline(run)
+    if st == "done":
+        title = f"{graph} — report ready"
+        body = headline or f"run {summary['id']} complete"
+    else:
+        title = f"Windhover — run {st}"
+        body = err or headline or f"{graph} · {summary['id']}"
     tag, url = summary["id"], f"/#run={summary['id']}"
-    if summary["status"] == "interrupted":
+    if st == "interrupted":
         try:
             n = store.awaiting_count()
         except Exception:
@@ -213,19 +253,25 @@ def _push_alert(summary: dict) -> None:
             body = f"latest: {graph} · {summary['id']}"
             tag, url = "windhover-awaiting", "/#fleet"
     push.send_to_all(store, cfg, {
-        "title": title, "body": body, "tag": tag, "url": url,
-        "status": summary["status"],
+        "title": title, "body": body, "tag": tag, "url": url, "status": st,
     })
 
 
 def _on_run_closed(summary: dict) -> None:
+    run = store.run_detail(summary["id"]) or summary
+    if not _alert_match(summary, run):
+        # non-matching runs still get their report materialized if that's enabled
+        if cfg.report_dir:
+            _materialize_report(run)
+        return
+    _materialize_report(run)
     if cfg.webhook or cfg.webhook_map:
-        _fire_webhook(summary)
+        _fire_webhook(summary, run)
     if cfg.push_enabled:
-        _push_alert(summary)
+        _push_alert(summary, run)
 
 
-if cfg.webhook or cfg.webhook_map or cfg.push_enabled:
+if cfg.webhook or cfg.webhook_map or cfg.push_enabled or cfg.report_dir:
     store.on_run_closed = _on_run_closed
 
 
