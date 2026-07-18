@@ -72,6 +72,11 @@ class Store:
                 c.execute("ALTER TABLE runs ADD COLUMN bookmarked INTEGER DEFAULT 0")
             if "thread_id" not in cols:
                 c.execute("ALTER TABLE runs ADD COLUMN thread_id TEXT")
+            # prompt-cache token rollup (Anthropic): cache_read = tokens served from cache,
+            # cache_write = tokens written to cache. Summed from span usage_detail at run close.
+            for col in ("cache_read_tokens", "cache_write_tokens"):
+                if col not in cols:
+                    c.execute(f"ALTER TABLE runs ADD COLUMN {col} INTEGER")
             scols = [r[1] for r in c.execute("PRAGMA table_info(spans)").fetchall()]
             for col, typ in (("retries", "INTEGER"), ("ttft_ms", "INTEGER"),
                              ("usage_detail", "TEXT"), ("params", "TEXT")):
@@ -167,14 +172,27 @@ class Store:
                 COUNT(*) FILTER (WHERE type='llm') lc,
                 SUM(prompt_tokens) pt, SUM(completion_tokens) ct, SUM(cost_usd) cost
                 FROM spans WHERE run_id=?""", (run_id,)).fetchone()
+            # roll up prompt-cache tokens from span usage_detail (needs json1). cache_read is the
+            # canonical key; cache_write sums the ephemeral 5m/1h creation counts (or plain creation).
+            cr = cw = None
+            if getattr(self, "has_json1", False):
+                cagg = c.execute("""SELECT
+                    SUM(COALESCE(json_extract(usage_detail,'$.input_cache_read'),0)) cr,
+                    SUM(COALESCE(json_extract(usage_detail,'$.input_ephemeral_5m_input_tokens'),0)
+                       +COALESCE(json_extract(usage_detail,'$.input_ephemeral_1h_input_tokens'),0)
+                       +COALESCE(json_extract(usage_detail,'$.input_cache_creation'),0)) cw
+                    FROM spans WHERE run_id=? AND usage_detail IS NOT NULL""", (run_id,)).fetchone()
+                cr, cw = (cagg["cr"] or None), (cagg["cw"] or None)
             st = c.execute("SELECT started_ms FROM runs WHERE id=?", (run_id,)).fetchone()
             started = st["started_ms"] if st else ended_ms
             pt, ct = agg["pt"], agg["ct"]
             c.execute("""UPDATE runs SET status=?,ended_ms=?,duration_ms=?,error=?,
-                node_count=?,llm_calls=?,prompt_tokens=?,completion_tokens=?,total_tokens=?,cost_usd=?
+                node_count=?,llm_calls=?,prompt_tokens=?,completion_tokens=?,total_tokens=?,cost_usd=?,
+                cache_read_tokens=?,cache_write_tokens=?
                 WHERE id=?""",
                 (status, ended_ms, ended_ms - started, error, agg["nc"], agg["lc"],
-                 pt, ct, (pt or 0) + (ct or 0) if (pt or ct) else None, agg["cost"], run_id))
+                 pt, ct, (pt or 0) + (ct or 0) if (pt or ct) else None, agg["cost"],
+                 cr, cw, run_id))
         if self.on_run_closed is not None:
             try:
                 self.on_run_closed({"id": run_id, "status": status, "error": error,

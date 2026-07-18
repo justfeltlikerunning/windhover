@@ -11,6 +11,7 @@ token gate as the rest of /api.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
 
@@ -105,6 +106,14 @@ def extract_paths(obj) -> list[str]:
             return
         if isinstance(v, str):
             s = v.strip()
+            # a node may return its output as a JSON string (e.g. a serialized dict of paths);
+            # decode and recurse so those paths are still discovered
+            if s[:1] in "{[":
+                try:
+                    walk(json.loads(s))
+                    return
+                except Exception:
+                    pass
             if len(s) <= 500 and _PATH_RE.match(s) and s not in seen:
                 seen.add(s)
                 out.append(s)

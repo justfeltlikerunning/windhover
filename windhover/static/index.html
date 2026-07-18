@@ -1509,8 +1509,32 @@ async function loadReports(){
       <td class="r" style="white-space:nowrap">
         <button class="btn ghost" onclick="previewReport('${r.id}')">👁 Report</button>
         <a class="btn ghost" href="/api/runs/${r.id}/report.md${tok}" download>⬇ .md</a>
+        <button class="btn ghost" onclick="toggleReportFiles('${r.id}',this)">📎 Files${r._arts&&r._arts.length?' ('+r._arts.length+')':''}</button>
         <button class="btn ghost" onclick="openRun('${r.id}')">Open</button></td>
-    </tr>`).join('')}</tbody></table></div>`;
+    </tr>
+    <tr class="repfiles-row" id="repfiles-${r.id}" style="display:none"><td colspan="4" class="repfiles-cell" style="padding:4px 10px 10px"></td></tr>`).join('')}</tbody></table></div>`;
+}
+async function toggleReportFiles(id, btn){
+  const row=document.getElementById('repfiles-'+id);
+  if(!row) return;
+  if(row.style.display==='table-row'){ row.style.display='none'; if(btn) btn.classList.remove('primary'); return; }
+  row.style.display='table-row';
+  if(btn) btn.classList.add('primary');
+  const cell=row.querySelector('.repfiles-cell');
+  if(cell.dataset.loaded) return;
+  cell.innerHTML='<div class="empty" style="padding:8px">Loading files…</div>';
+  let arts=[];
+  try{ arts=(await (await fetch('/api/runs/'+id+'/artifacts')).json()).artifacts||[]; }catch(e){}
+  const tok=whToken()?'&token='+encodeURIComponent(whToken()):'';
+  cell.innerHTML = arts.length ? arts.map(a=>`<div class="artrow">
+      <span class="artkind ${a.kind}">${esc(a.ext)}</span>
+      <span class="artname mono" title="${esc(a.path)}">${esc(a.name)}</span>
+      ${a.exists?`<span class="artsize">${a.size<1024?a.size+' B':a.size<1048576?(a.size/1024).toFixed(1)+' KB':(a.size/1048576).toFixed(1)+' MB'}</span>`
+                :`<span class="tagchip" title="recorded by the run, but not readable on this host">missing here</span>`}
+      ${a.exists&&ART_PREVIEWABLE.has(a.kind)?`<button class="copy" onclick="previewArt('${id}','${encodeURIComponent(a.path)}','${a.kind}','${a.ext}','${esc(a.name)}')">preview</button>`:''}
+      ${a.exists?`<a class="copy" href="/api/runs/${id}/artifact?path=${encodeURIComponent(a.path)}${tok}" download="${esc(a.name)}">download</a>`:''}
+    </div>`).join('') : '<div class="empty" style="padding:8px">No files.</div>';
+  cell.dataset.loaded='1';
 }
 async function loadRuns(){
   const p=runParams(); p.set('limit',RF.limit); p.set('offset',RF.offset);
@@ -1588,6 +1612,7 @@ async function openRun(id){
     `<span><b class="num">${r.node_count||0}</b> nodes</span>`,
     r.llm_calls?`<span><b class="num">${r.llm_calls}</b> LLM calls</span>`:'',
     r.total_tokens?`<span><b class="num">${fmtk(r.total_tokens)}</b> tokens</span>`:'',
+    (r.cache_read_tokens||r.cache_write_tokens)?`<span title="prompt-cache: tokens served from cache (read, billed 0.1x) / written to cache (write, billed 1.25x)"><b class="num">${fmtk(r.cache_read_tokens||0)}</b> cache read${r.cache_write_tokens?` · <b class="num">${fmtk(r.cache_write_tokens)}</b> write`:''}</span>`:'',
     r.cost_usd!=null?`<span><b class="num">$${r.cost_usd.toFixed(5)}</b> cost</span>`:'',
     r.session?`<span>session <b class="mono">${esc(r.session)}</b></span>`:'',
     r.thread_id?`<span>thread <b class="mono">${esc(r.thread_id)}</b> <button class="copy" onclick="showHistory('${esc(r.thread_id)}')">time-travel</button></span>`:'',

@@ -17,6 +17,18 @@ def test_cost():
     assert cost_of(None, 1, 1) is None
 
 
+def test_cost_prompt_cache():
+    # input_tokens is inclusive of cache tokens; cache reads bill 0.1x, 5m writes 1.25x
+    base = cost_of("gpt-4o", 1_000_000, 0)                       # 2.5, no cache detail
+    assert base == 2.5
+    # all 1M input served from cache -> 0.1x
+    assert cost_of("gpt-4o", 1_000_000, 0, {"input_cache_read": 1_000_000}) == 0.25
+    # 1M written to cache (5m) -> 1.25x
+    assert cost_of("gpt-4o", 1_000_000, 0, {"input_ephemeral_5m_input_tokens": 1_000_000}) == 3.125
+    # detail=None must equal the no-detail call (backward compatible)
+    assert cost_of("gpt-4o", 500, 500, None) == cost_of("gpt-4o", 500, 500)
+
+
 def test_store_roundtrip():
     p = tempfile.mktemp(suffix=".db")
     s = Store(p)

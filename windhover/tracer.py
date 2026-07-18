@@ -43,7 +43,31 @@ def _load_pricing() -> dict:
     return _PRICING
 
 
-def cost_of(model: Optional[str], pt: Optional[int], ct: Optional[int]) -> Optional[float]:
+# Anthropic prompt-cache multipliers on the base input rate: a cache READ is 0.1x, a 5-min cache
+# WRITE is 1.25x, a 1-hour cache WRITE is 2x. usage_metadata.input_tokens is INCLUSIVE of cache
+# tokens, so we split it into (regular, read, write) and price each tier — otherwise a cached run
+# is billed as if every token were full-price input (10x over on the cached portion).
+_CACHE_READ_MULT = 0.1
+_CACHE_WRITE_5M_MULT = 1.25
+_CACHE_WRITE_1H_MULT = 2.0
+
+
+def _cache_split(detail: Optional[dict]) -> tuple[int, int, int]:
+    """(read, write_5m, write_1h) cache token counts from a span's usage_detail. Handles both the
+    canonical keys (input_cache_read / input_cache_creation) and Anthropic's TTL breakdown
+    (input_ephemeral_5m_input_tokens / input_ephemeral_1h_input_tokens)."""
+    if not isinstance(detail, dict):
+        return 0, 0, 0
+    read = int(detail.get("input_cache_read") or 0)
+    w5 = int(detail.get("input_ephemeral_5m_input_tokens") or 0)
+    w1 = int(detail.get("input_ephemeral_1h_input_tokens") or 0)
+    if not (w5 or w1):                      # fall back to the undifferentiated creation count (5m TTL)
+        w5 = int(detail.get("input_cache_creation") or 0)
+    return read, w5, w1
+
+
+def cost_of(model: Optional[str], pt: Optional[int], ct: Optional[int],
+            detail: Optional[dict] = None) -> Optional[float]:
     if not model or (pt is None and ct is None):
         return None
     table = _load_pricing()
@@ -51,7 +75,16 @@ def cost_of(model: Optional[str], pt: Optional[int], ct: Optional[int]) -> Optio
     if not best:
         return None
     rate = table[best]
-    return round((pt or 0) / 1e6 * rate["input"] + (ct or 0) / 1e6 * rate["output"], 6)
+    inp, out = rate["input"], rate["output"]
+    read, w5, w1 = _cache_split(detail)
+    # input_tokens is inclusive of cache read+write; what remains is billed at the full input rate
+    regular = max(0, (pt or 0) - read - w5 - w1)
+    cost = (regular / 1e6 * inp
+            + read / 1e6 * inp * _CACHE_READ_MULT
+            + w5 / 1e6 * inp * _CACHE_WRITE_5M_MULT
+            + w1 / 1e6 * inp * _CACHE_WRITE_1H_MULT
+            + (ct or 0) / 1e6 * out)
+    return round(cost, 6)
 
 
 def _err_text(error: Any) -> str:
@@ -106,13 +139,13 @@ def _model_name(serialized: dict, kw: dict) -> str:
 
 def _usage(response: Any) -> tuple[Optional[int], Optional[int], Optional[dict]]:
     """(prompt, completion, detail) — detail carries cache_read/cache_creation/
-    reasoning token counts when the provider reports them."""
-    out = getattr(response, "llm_output", None) or {}
-    for key in ("token_usage", "usage"):
-        u = out.get(key) if isinstance(out, dict) else None
-        if u:
-            return (u.get("prompt_tokens") or u.get("input_tokens"),
-                    u.get("completion_tokens") or u.get("output_tokens"), None)
+    reasoning token counts when the provider reports them.
+
+    Prefer the message-level usage_metadata: it carries the cache/reasoning breakdown in
+    input_token_details/output_token_details, which the flat llm_output.token_usage drops. Only
+    fall back to llm_output when no generation exposes usage_metadata — otherwise a cached run
+    records its prompt/completion totals but silently loses every cache token (the detail is there,
+    just never read)."""
     try:
         for gens in response.generations:
             for g in gens:
@@ -126,6 +159,12 @@ def _usage(response: Any) -> tuple[Optional[int], Optional[int], Optional[dict]]
                     return um.get("input_tokens"), um.get("output_tokens"), detail or None
     except Exception:
         pass
+    out = getattr(response, "llm_output", None) or {}
+    for key in ("token_usage", "usage"):
+        u = out.get(key) if isinstance(out, dict) else None
+        if u:
+            return (u.get("prompt_tokens") or u.get("input_tokens"),
+                    u.get("completion_tokens") or u.get("output_tokens"), None)
     return None, None, None
 
 
@@ -220,7 +259,7 @@ class SpanBuilder(BaseCallbackHandler):
                     "dur_ms": int((now - info["t"]) * 1000),
                     "input": info.get("input"), "output": output, "model": model,
                     "prompt_tokens": pt, "completion_tokens": ct,
-                    "cost_usd": cost_of(model, pt, ct), "error": error,
+                    "cost_usd": cost_of(model, pt, ct, usage_detail), "error": error,
                     "retries": info.get("retries"),
                     "ttft_ms": int(info["ttft"] * 1000) if info.get("ttft") is not None else None,
                     "usage_detail": usage_detail, "params": info.get("params")})
