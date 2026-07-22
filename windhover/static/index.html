@@ -1622,6 +1622,8 @@ async function openRun(id){
   ].filter(Boolean).join('');
   const total=Math.max(1,...r.spans.map(s=>(s.offset_ms||0)+(s.dur_ms||0)));
   const byParent={}; r.spans.forEach(s=>{(byParent[s.parent_id||'root']=byParent[s.parent_id||'root']||[]).push(s);});
+  window.__SPD={}; r.spans.forEach(s=>{window.__SPD[s.id]=s;});
+  window.__BYP=byParent; window.__TOTAL=total; window.__BIG=r.spans.length>800;
   let html = r.error?`<div class="kv"><div class="k">run error</div><pre class="err">${esc(r.error)}</pre></div>`:'';
   if(r.input!=null) html += kv('run input', r.input);
   html += renderSpans(byParent['root']||[],byParent,total,0);
@@ -1672,7 +1674,7 @@ async function openRun(id){
   const openIds=[...document.querySelectorAll('#d-body .tr-detail')]
     .filter(e=>e.style.display==='block').map(e=>e.id);
   $('#d-body').innerHTML=html;
-  openIds.forEach(i=>{const e=document.getElementById(i); if(e){e.style.display='block';
+  openIds.forEach(i=>{const e=document.getElementById(i); if(e){fillDetail(e); e.style.display='block';
     const row=e.previousElementSibling; row&&row.querySelector('.caret')?.classList.add('open');}});
   const gsel=document.getElementById('hitl-goto');
   if(gsel&&cy) gsel.innerHTML='<option value="">goto node (optional)…</option>'+
@@ -1721,18 +1723,12 @@ function renderSpans(list,byParent,total,depth){
       <div class="tr-row ${pg?'pgrp':''}" onclick="tog('${did}',this)">
         <div class="tr-main"><span class="indent" style="width:${depth*18}px"></span>
           <span class="caret">▶</span><span class="chip ${s.type}">${s.type}</span>
-          <span class="tr-name ${s.status==='error'?'err':''} ${/Middleware\./.test(s.name||'')?'fw':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}${pg?`<span class="badge-par" title="ran concurrently with ${pg.n-1} sibling${pg.n>2?'s':''} — branches overlap in time">∥ ${pg.n}</span>`:''}</div>
+          <span class="tr-name ${s.status==='error'?'err':''} ${/Middleware\./.test(s.name||'')?'fw':''}">${esc(s.name||s.type)}</span>${s.retries?`<span class="badge-retry">↻${s.retries}</span>`:''}${pg?`<span class="badge-par" title="ran concurrently with ${pg.n-1} sibling${pg.n>2?'s':''} — branches overlap in time">∥ ${pg.n}</span>`:''}${(window.__BIG&&kids.length)?`<span class="badge-par" title="${kids.length} nested spans — click to expand">▸ ${kids.length}</span>`:''}</div>
         <div class="tr-gantt"><div class="tr-bar ${s.type}" style="left:${left}%;width:${width}%"></div></div>
         <div class="tr-meta">${meta}</div>
       </div>
-      <div class="tr-detail" id="${did}">
-        ${s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}${s.usage_detail?'  ·  '+esc(Object.entries(s.usage_detail).map(([k,v])=>`${v} ${k.replace('input_','').replace('output_','')}`).join(', ')):''}${s.params?'\n'+esc(Object.entries(s.params).map(([k,v])=>k==='tools_offered'?'tools: '+v.join(', '):k+'='+v).join('  ·  ')):''}</pre></div>`:''}
-        ${s.error?`<div class="kv"><div class="k">error${s.type==='node'?`<button class="copy" onclick="showSpanSource('${s.id}')">view source</button>`:''}</div><pre class="err">${esc(s.error)}</pre><div id="src-${s.id}"></div></div>`:''}
-        ${s.input!=null?kv('input',s.input):''}
-        ${s.output!=null?kv('output',s.output):''}
-        ${(!s.error&&s.input==null&&s.output==null&&!s.model)?'<div class="kv"><pre>no captured payload</pre></div>':''}
-      </div>
-      ${renderSpans(kids,byParent,total,depth+1)}
+      <div class="tr-detail" id="${did}" data-sid="${s.id}"></div>
+      ${(window.__BIG&&kids.length)?`<div class="tr-kids" data-pid="${s.id}" data-depth="${depth+1}"></div>`:renderSpans(kids,byParent,total,depth+1)}
     </div>`;
   }).join('');
 }
@@ -1773,7 +1769,21 @@ function kv(k,v){
   const prose=narr?`<div class="prose">${esc(narr)}</div>`:'';
   const body=msgs?chatHtml(msgs):todos?todoHtml(todos):(prose+`<pre>${esc(txt)}</pre>`);
   return `<div class="kv"><div class="k">${k}<button class="copy" onclick="navigator.clipboard.writeText(${JSON.stringify(txt).replace(/"/g,'&quot;')});toast('Copied')">copy</button></div>${body}</div>`; }
+function spanDetailHtml(s){ if(!s) return '<div class="kv"><pre>span not found</pre></div>';
+  return (s.model?`<div class="kv"><div class="k">model</div><pre>${esc(s.model)}${s.prompt_tokens!=null?`  ·  ${s.prompt_tokens} in / ${s.completion_tokens||0} out`:''}${s.usage_detail?'  ·  '+esc(Object.entries(s.usage_detail).map(([k,v])=>`${v} ${k.replace('input_','').replace('output_','')}`).join(', ')):''}${s.params?'\n'+esc(Object.entries(s.params).map(([k,v])=>k==='tools_offered'?'tools: '+v.join(', '):k+'='+v).join('  ·  ')):''}</pre></div>`:'')+
+  (s.error?`<div class="kv"><div class="k">error${s.type==='node'?`<button class="copy" onclick="showSpanSource('${s.id}')">view source</button>`:''}</div><pre class="err">${esc(s.error)}</pre><div id="src-${s.id}"></div></div>`:'')+
+  (s.input!=null?kv('input',s.input):'')+
+  (s.output!=null?kv('output',s.output):'')+
+  ((!s.error&&s.input==null&&s.output==null&&!s.model)?'<div class="kv"><pre>no captured payload</pre></div>':'');
+}
+function fillDetail(el){ if(el&&el.dataset.sid&&!el.dataset.filled){
+  el.innerHTML=spanDetailHtml((window.__SPD||{})[el.dataset.sid]); el.dataset.filled='1'; } }
 window.tog=(id,row)=>{ const el=document.getElementById(id); const open=el.style.display==='block';
+  if(!open) fillDetail(el);   // payload HTML is built on first expand, not at render time
+  const kd=el.nextElementSibling;
+  if(!open&&kd&&kd.classList&&kd.classList.contains('tr-kids')&&!kd.dataset.filled){
+    kd.innerHTML=renderSpans((window.__BYP||{})[kd.dataset.pid]||[],window.__BYP,window.__TOTAL||1,parseInt(kd.dataset.depth||'1',10));
+    kd.dataset.filled='1'; }
   el.style.display=open?'none':'block'; row.querySelector('.caret').classList.toggle('open',!open); };
 /* ---------- run replay — real span timings on the canvas, with a scrubber ---------- */
 let RP=null;   // {spans,total,t,playing,raf,last,speed:'fit'|N}
